@@ -41,7 +41,7 @@ public class MecanumDriveModeNew extends OpMode {
     );
 
     // Open-loop scale for the left follower motor (helps match torque losses)
-    private static final double LEFT_POWER_SCALE = 1.00; // try 1.00–1.10 if left lags
+    private static final double LEFT_POWER_SCALE = 1.05; // try 1.00–1.10 if left lags
 
     private enum FlywheelState { OFF, CLOSE, LONG }
     private FlywheelState state = FlywheelState.OFF;
