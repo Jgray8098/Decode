@@ -8,15 +8,16 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 
-import org.firstinspires.ftc.teamcode.mechanism.MecanumDrive;
+import org.firstinspires.ftc.teamcode.mechanism.MecanumDriveField;
 
-@TeleOp(name="MecanumDriveModeNew")
-public class MecanumDriveModeNew extends OpMode {
-    MecanumDrive drive = new MecanumDrive();
+@TeleOp(name="MecanumDriveFieldOrientation")
+public class MecanumDriveFieldOrientation extends OpMode {
+    MecanumDriveField drive = new MecanumDriveField();
+    double forward, strafe, rotate;
 
     // ---- Flywheel motors ----
     private DcMotorEx flywheelRight; // encoder connected
-    private DcMotor   flywheelLeft;  // no encoder
+    private DcMotor flywheelLeft;  // no encoder
 
     // ---- Intake (gamepad2: Y forward while held, A reverse while held) ----
     private DcMotor intakeMotor;
@@ -48,7 +49,7 @@ public class MecanumDriveModeNew extends OpMode {
 
     // ---- Flywheel targets (RPM at wheel; 1:1) ----
     private static final double CLOSE_FLYWHEEL_RPM = 2300;
-    private static final double LONG_FLYWHEEL_RPM  = 3000;
+    private static final double LONG_FLYWHEEL_RPM = 3000;
 
     // ---- Velocity PIDF for the RIGHT flywheel motor ----
     private static final PIDFCoefficients VEL_PIDF = new PIDFCoefficients(
@@ -61,7 +62,8 @@ public class MecanumDriveModeNew extends OpMode {
     // Open-loop scale for the left follower motor
     private static final double LEFT_POWER_SCALE = 1.1;
 
-    private enum FlywheelState { OFF, CLOSE, LONG }
+    private enum FlywheelState {OFF, CLOSE, LONG}
+
     private FlywheelState state = FlywheelState.OFF;
 
     // Button edge-detection (flywheel on gamepad2 dpad)
@@ -83,10 +85,10 @@ public class MecanumDriveModeNew extends OpMode {
 
         // Map devices
         flywheelRight = hardwareMap.get(DcMotorEx.class, "flywheelRight"); // encoder here
-        flywheelLeft  = hardwareMap.get(DcMotor.class,   "flywheelLeft");  // no encoder
-        intakeMotor   = hardwareMap.get(DcMotor.class,   "intakeMotor");
-        indexer       = hardwareMap.get(DcMotorEx.class, "Indexer");       // check name in RC config
-        camServo      = hardwareMap.get(Servo.class, "camServo");
+        flywheelLeft = hardwareMap.get(DcMotor.class, "flywheelLeft");  // no encoder
+        intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
+        indexer = hardwareMap.get(DcMotorEx.class, "Indexer");       // check name in RC config
+        camServo = hardwareMap.get(Servo.class, "camServo");
 
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
 
@@ -103,7 +105,8 @@ public class MecanumDriveModeNew extends OpMode {
         flywheelRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         try {
             flywheelRight.setVelocityPIDFCoefficients(VEL_PIDF.p, VEL_PIDF.i, VEL_PIDF.d, VEL_PIDF.f);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         // Left (follower) open-loop
         flywheelLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -130,10 +133,10 @@ public class MecanumDriveModeNew extends OpMode {
     public void loop() {
 
         // ---------- MECANUM DRIVE (gamepad1 sticks) ----------
-        double forward = -gamepad1.right_stick_y;
-        double right   =  gamepad1.right_stick_x;
-        double rotate  =  gamepad1.left_stick_x;
-        drive.drive(forward, right, rotate);
+        forward = -gamepad1.right_stick_y;
+        strafe = gamepad1.right_stick_x;
+        rotate = gamepad1.left_stick_x;
+        drive.driveFieldRelative(forward, strafe, rotate);
 
         // ---------- FLYWHEEL CONTROL (gamepad2 dpad, toggle logic) ----------
         boolean up2 = gamepad2.dpad_up;
@@ -147,11 +150,12 @@ public class MecanumDriveModeNew extends OpMode {
         if (down2 && !prevDown2) {
             state = (state == FlywheelState.LONG) ? FlywheelState.OFF : FlywheelState.LONG;
         }
-        prevUp2 = up2; prevDown2 = down2;
+        prevUp2 = up2;
+        prevDown2 = down2;
 
         double targetFlywheelRpm =
                 (state == FlywheelState.CLOSE) ? CLOSE_FLYWHEEL_RPM :
-                        (state == FlywheelState.LONG)  ? LONG_FLYWHEEL_RPM  : 0.0;
+                        (state == FlywheelState.LONG) ? LONG_FLYWHEEL_RPM : 0.0;
 
         if (state == FlywheelState.OFF) {
             flywheelRight.setPower(0.0);
