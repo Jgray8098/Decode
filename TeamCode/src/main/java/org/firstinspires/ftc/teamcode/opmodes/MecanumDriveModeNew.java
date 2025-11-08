@@ -32,8 +32,9 @@ public class MecanumDriveModeNew extends OpMode {
     private DcMotor intakeMotor;
 
     private Indexer indexer;
-    private boolean prevLB2 = false;
-    private boolean prevRB2 = false;
+    private boolean prevLB2 = false; // manual advance
+    private boolean prevRB2 = false; // manual cam
+    private boolean prevB2  = false; // auto-launch trigger
 
     private Flywheel flywheel;
     private boolean prevUp2 = false, prevDown2 = false;
@@ -69,6 +70,7 @@ public class MecanumDriveModeNew extends OpMode {
         telemetry.addLine("[G1] LB=Hold Align, RB=Toggle Goal & Pipeline (BLUE↔RED)");
         telemetry.addLine("Indexer: GP2 LB = advance one slot.");
         telemetry.addLine("Cam:     GP2 RB = toggle cam.");
+        telemetry.addLine("Auto:    GP2 B  = auto launch 3 balls.");
         telemetry.addLine("Intake:  GP2 Y = FORWARD while held, GP2 A = REVERSE while held.");
         telemetry.addLine("Flywheel (GP2): Dpad Up = CLOSE (toggle), Dpad Down = LONG (toggle).");
     }
@@ -107,12 +109,10 @@ public class MecanumDriveModeNew extends OpMode {
 
         boolean up2 = gamepad2.dpad_up;
         boolean down2 = gamepad2.dpad_down;
-
         if (up2 && !prevUp2) flywheel.toggleClose();
         if (down2 && !prevDown2) flywheel.toggleLong();
         prevUp2 = up2;
         prevDown2 = down2;
-
         flywheel.update(dt);
 
         double intakePower = 0.0;
@@ -120,14 +120,29 @@ public class MecanumDriveModeNew extends OpMode {
         else if (gamepad2.a) intakePower = -1.0;
         intakeMotor.setPower(intakePower);
 
-        boolean lb2 = gamepad2.left_bumper;
-        if (lb2 && !prevLB2 && !indexer.isMoving()) indexer.advanceOneSlot();
-        prevLB2 = lb2;
-        indexer.update();
+        // ===== AUTO-LAUNCH (GP2 B) =====
+        boolean b2 = gamepad2.b;
+        if (b2 && !prevB2) {
+            indexer.startAutoLaunchAllThree();
+        }
+        prevB2 = b2;
 
+        // ===== Manual indexer/cam (disabled during auto) =====
+        boolean lb2 = gamepad2.left_bumper;
+        if (lb2 && !prevLB2 && !indexer.isAutoRunning() && !indexer.isMoving()) {
+            indexer.advanceOneSlot();
+        }
+        prevLB2 = lb2;
+
+// ===== Manual cam (GP2 RB) =====
         boolean rb2 = gamepad2.right_bumper;
-        if (rb2 && !prevRB2) indexer.toggleCam();
+        if (rb2 && !prevRB2 && !indexer.isAutoRunning()) {
+            indexer.setCamOpen(!indexer.isCamOpen());
+        }
         prevRB2 = rb2;
+
+        // Always update indexer (handles motion + auto sequence)
+        indexer.update(dt);
 
         telemetry.addData("Goal", (selectedTid == RED_GOAL_TID) ? "RED(24)" : "BLUE(20)");
         telemetry.addData("Pipeline", selectedPipe);
@@ -143,10 +158,9 @@ public class MecanumDriveModeNew extends OpMode {
         telemetry.addData("Flywheel Left Measured RPM", "%.0f", flywheel.getMeasuredLeftRpm());
 
         telemetry.addData("Intake power", "%.1f", intakePower);
-        telemetry.addData("Indexer curr", indexer.getCurrentPosition());
-        telemetry.addData("Indexer next", indexer.getNextTargetPosition());
         telemetry.addData("Indexer moving", indexer.isMoving());
         telemetry.addData("Cam open", indexer.isCamOpen());
+        telemetry.addData("Auto launching", indexer.isAutoRunning());
         telemetry.update();
     }
 }

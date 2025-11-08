@@ -6,9 +6,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
 /**
- * Indexer mechanism that encapsulates:
- *  - A slotted index wheel driven by a motor with encoder
- *  - A cam servo with simple open/closed positions
+ * Simplified Indexer:
+ *  - advanceOneSlot() for manual use
+ *  - autoLaunchAllThree(): open cam, advance twice, close cam, done
  */
 public class Indexer {
     private DcMotorEx indexer;
@@ -20,7 +20,6 @@ public class Indexer {
     private final int ticksPerRev;
     private final int slots;
     private final double indexerPower;
-
     private final double camInitPos;
     private final double camOpenPos;
 
@@ -28,7 +27,12 @@ public class Indexer {
     private int targetPosition = 0;
     private boolean moving = false;
     private boolean camOpen = false;
+    private boolean autoRunning = false;
+    private int autoStep = 0;
+    private double timerS = 0.0;
 
+    // timing (seconds)
+    private static final double STEP_DELAY = 0.15;
     private static final int POSITION_TOL = 10;
 
     public Indexer(String indexerMotorName, String camServoName) {
@@ -58,41 +62,85 @@ public class Indexer {
         ticksPerSlot = ticksPerRev / Math.max(1, slots);
         targetPosition = 0;
         moving = false;
-
-        camServo.setPosition(camInitPos);
         camOpen = false;
+        camServo.setPosition(camInitPos);
     }
 
+    /** Manual single advance. */
     public void advanceOneSlot() {
-        if (moving) return;
+        if (moving || autoRunning) return;
         targetPosition += ticksPerSlot;
+        runToTarget();
+    }
+
+    /** Begin automatic 3-ball launch (open cam + 2 advances). */
+    public void startAutoLaunchAllThree() {
+        if (autoRunning || moving) return;
+        autoRunning = true;
+        autoStep = 0;
+        timerS = 0;
+        setCamOpen(true); // launch first ball
+    }
+
+    public void update(double dt) {
+        // Manage motion end
+        if (moving && !indexer.isBusy()) {
+            indexer.setPower(0.0);
+            indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            moving = false;
+        }
+
+        // Handle auto sequence
+        if (autoRunning) {
+            timerS += dt;
+
+            switch (autoStep) {
+                case 0:
+                    // wait a short delay before first advance
+                    if (timerS > STEP_DELAY) {
+                        timerS = 0;
+                        autoStep = 1;
+                        targetPosition += ticksPerSlot;
+                        runToTarget();
+                    }
+                    break;
+
+                case 1:
+                    // wait for first move to finish, then short delay
+                    if (!moving && timerS > STEP_DELAY) {
+                        timerS = 0;
+                        autoStep = 2;
+                        targetPosition += ticksPerSlot;
+                        runToTarget();
+                    }
+                    break;
+
+                case 2:
+                    // after second move and delay, close cam and finish
+                    if (!moving && timerS > STEP_DELAY) {
+                        setCamOpen(false);
+                        autoRunning = false;
+                    }
+                    break;
+            }
+        }
+    }
+
+    private void runToTarget() {
         indexer.setTargetPosition(targetPosition);
         indexer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         indexer.setPower(indexerPower);
         moving = true;
     }
 
-    public void update() {
-        if (!moving) return;
-        int posErr = targetPosition - indexer.getCurrentPosition();
-        boolean atTarget = Math.abs(posErr) <= POSITION_TOL || !indexer.isBusy();
-        if (atTarget) {
-            indexer.setPower(0.0);
-            indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            moving = false;
-        }
-    }
-
+    // --- Helpers ---
     public boolean isMoving() { return moving; }
-    public int getCurrentPosition() { return indexer.getCurrentPosition(); }
-    public int getTargetPosition() { return targetPosition; }
-    public int getNextTargetPosition() { return targetPosition + ticksPerSlot; }
+    public boolean isAutoRunning() { return autoRunning; }
 
     public void setCamOpen(boolean open) {
         camOpen = open;
         camServo.setPosition(camOpen ? camOpenPos : camInitPos);
     }
 
-    public void toggleCam() { setCamOpen(!camOpen); }
     public boolean isCamOpen() { return camOpen; }
 }
