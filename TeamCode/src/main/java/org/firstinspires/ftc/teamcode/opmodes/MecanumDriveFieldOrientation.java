@@ -10,7 +10,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.mechanism.MecanumDriveField;
 
-@TeleOp(name="MecanumDriveFieldOrientation")
+//@TeleOp(name="MecanumDriveFieldOrientation")
 public class MecanumDriveFieldOrientation extends OpMode {
     MecanumDriveField drive = new MecanumDriveField();
     double forward, strafe, rotate;

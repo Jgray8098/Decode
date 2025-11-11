@@ -22,6 +22,7 @@ public class Indexer {
     private final double indexerPower;
     private final double camInitPos;
     private final double camOpenPos;
+    private boolean homeCamOnInit = true;
 
     private int ticksPerSlot;
     private int targetPosition = 0;
@@ -51,6 +52,10 @@ public class Indexer {
         this.camOpenPos = camOpenPos;
     }
 
+    public void setHomeCamOnInit(boolean enable) {
+        this.homeCamOnInit = enable;
+    }
+
     public void init(HardwareMap hw) {
         indexer = hw.get(DcMotorEx.class, indexerMotorName);
         camServo = hw.get(Servo.class, camServoName);
@@ -63,7 +68,10 @@ public class Indexer {
         targetPosition = 0;
         moving = false;
         camOpen = false;
-        camServo.setPosition(camInitPos);
+        // Only move servo during init if allowed
+        if (homeCamOnInit) {
+            camServo.setPosition(camInitPos);
+        }
     }
 
     /** Manual single advance. */
@@ -136,6 +144,9 @@ public class Indexer {
     // --- Helpers ---
     public boolean isMoving() { return moving; }
     public boolean isAutoRunning() { return autoRunning; }
+    public void homeCam() {
+        setCamOpen(false); // this will send servo to camInitPos
+    }
 
     public void setCamOpen(boolean open) {
         camOpen = open;
