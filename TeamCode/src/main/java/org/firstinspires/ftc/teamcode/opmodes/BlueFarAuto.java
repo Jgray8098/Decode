@@ -35,7 +35,7 @@ public class BlueFarAuto extends LinearOpMode {
 
     // === Pedro Poses (inches, radians) ===
     private static final Pose START_POSE  = new Pose(61.96, 9.27, Math.toRadians(90.0));
-    private static final Pose TARGET_POSE = new Pose(60.61, 23.94, Math.toRadians(115.0));
+    private static final Pose TARGET_POSE = new Pose(60.61, 22.94, Math.toRadians(120.0));
     // No heading change after launch: keep 115°
     private static final Pose PARK_POSE   = new Pose(39.76, 46.13, Math.toRadians(115.0));
 
