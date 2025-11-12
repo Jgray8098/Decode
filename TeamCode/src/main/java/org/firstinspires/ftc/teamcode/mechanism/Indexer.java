@@ -60,18 +60,24 @@ public class Indexer {
         indexer = hw.get(DcMotorEx.class, indexerMotorName);
         camServo = hw.get(Servo.class, camServoName);
 
-        indexer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        //indexer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         indexer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         ticksPerSlot = ticksPerRev / Math.max(1, slots);
-        targetPosition = 0;
+        targetPosition = indexer.getTargetPosition();
         moving = false;
         camOpen = false;
         // Only move servo during init if allowed
         if (homeCamOnInit) {
             camServo.setPosition(camInitPos);
         }
+    }
+
+    public void hardZero() {                                                    // <<<
+        indexer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);                // <<<
+        targetPosition = 0;                                                     // <<<
+        indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);                     // <<<
     }
 
     /** Manual single advance. */

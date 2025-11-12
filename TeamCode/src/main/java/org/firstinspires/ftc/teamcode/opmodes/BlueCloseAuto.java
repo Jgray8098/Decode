@@ -113,6 +113,7 @@ public class BlueCloseAuto extends LinearOpMode {
 
         indexer = new Indexer("Indexer", "camServo");
         indexer.init(hardwareMap);
+        indexer.hardZero();   // <<< ensures Auto starts from encoder = 0
 
         flywheel = new Flywheel("flywheelRight", "flywheelLeft");
         flywheel.init(hardwareMap);
