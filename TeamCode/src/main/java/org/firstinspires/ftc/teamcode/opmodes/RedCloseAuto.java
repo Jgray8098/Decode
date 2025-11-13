@@ -15,10 +15,10 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "BlueCloseAuto", group = "Comp")
-public class BlueCloseAuto extends LinearOpMode {
+@Autonomous(name = "RedCloseAuto", group = "Comp")
+public class RedCloseAuto extends LinearOpMode {
 
-    // ===== Limelight pipelines & TIDs =====
+    // ===== Limelight pipelines & TIDs (same as blue) =====
     private static final int PIPE_OBELISK_1 = 2; // Tag 21 => GPP
     private static final int PIPE_OBELISK_2 = 3; // Tag 22 => PGP
     private static final int PIPE_OBELISK_3 = 4; // Tag 23 => PPG
@@ -33,15 +33,15 @@ public class BlueCloseAuto extends LinearOpMode {
     private static final double RPM_TOL           = 60.0;
 
     // ===== Turn settle gate (before first volley) =====
-    private static final double TURN1_TARGET_DEG     = 135.0; // Path2 ending heading
-    private static final double TURN1_HEADING_TOL_DEG= 2.0;   // ±2°
-    private static final double TURN1_MIN_SETTLE_S   = 0.30;  // 300 ms
-    private static final double TURN1_TIMEOUT_S      = 1.00;  // safety fallback
+    // Mirrored from Blue (Path2 ending heading was 150° -> mirror is 30°)
+    private static final double TURN1_TARGET_DEG      = 30.0;
+    private static final double TURN1_HEADING_TOL_DEG = 2.0;   // ±2°
+    private static final double TURN1_MIN_SETTLE_S    = 0.30;  // 300 ms
+    private static final double TURN1_TIMEOUT_S       = 1.00;  // safety fallback
 
-    // ===== Intake controls =====
+    // ===== Intake (Path4 burst) =====
     private static final double INTAKE_POWER_IN = 1.0;
-    private static final double INTAKE_BURST_S  = 3.00; // first intake leg extra time
-    private static final double INTAKE_EXTRA_HOLD_S = 0.60; // extra hold after arriving at each intake pose
+    private static final double INTAKE_BURST_S  = 3.00;
 
     // ===== Path2 safety (in-place heading change) =====
     private static final double PATH2_MAX_WAIT_S = 0.75; // timeout guard if follower stays busy
@@ -57,10 +57,10 @@ public class BlueCloseAuto extends LinearOpMode {
     private Follower follower;
     private Paths paths;
 
-    // Start pose (exact)
-    private static final Pose START_POSE = new Pose(20.65, 121.61, Math.toRadians(54));
+    // Start pose (mirrored from Blue: (20.65,121.61,54°) -> (123.35,121.61,126°))
+    private static final Pose START_POSE = new Pose(123.35, 121.61, Math.toRadians(126));
 
-    // Tag detection (during RUN, after Path1)
+    // Tag detection
     private int activePipeline = PIPE_OBELISK_1;
     private int detectedTid = -1;
     private long lastPipeSwapNs = 0L;
@@ -71,8 +71,7 @@ public class BlueCloseAuto extends LinearOpMode {
 
     // Intake control
     private boolean intakeActive = false;
-    private double intakeTimerS = 0.0;          // used by first intake burst
-    private double intakeHoldAfterPathS = 0.0;  // used by both intake legs
+    private double intakeTimerS = 0.0;
 
     // Spin-up timing
     private double spinupElapsedS = 0.0;
@@ -88,23 +87,15 @@ public class BlueCloseAuto extends LinearOpMode {
         DRIVE_PATH1_SCAN,          // to scanning pose
         DETECT_TAG,                // cycle 2/3/4 until 21/22/23
         DRIVE_PATH2_TO_LAUNCH,     // to launch pose; pre-advance while driving
-        TURN_SETTLE_1,             // ensure heading settled at 135° before spin-up
+        TURN_SETTLE_1,             // ensure heading settled at 30° before spin-up
         ARRIVED_SPINUP_WAIT_1,     // close-range spinup gate
-        FIRE_THREE_1,              // 3-ball volley #1
-        DRIVE_PATH3_ALIGN,         // to intake align (leg 1)
+        FIRE_THREE_1,              // 3-ball #1
+        DRIVE_PATH3_ALIGN,         // to intake align
         INTAKE_PATH4_BURST,        // follow Path4 while intaking (timed)
         DRIVE_PATH5_TO_LAUNCH,     // back to launch
-        ARRIVED_SPINUP_WAIT_2,     // spinup gate
-        FIRE_THREE_2,              // 3-ball volley #2
-
-        // NEW second intake + third launch sequence:
-        DRIVE_PATH7_ALIGN2,        // to second intake align (26.638, 75, 270)
-        INTAKE_PATH8_BURST2,       // to second intake pose (26.638, 62, 270) + hold
-        DRIVE_PATH9_TO_LAUNCH2,    // back to launch for third volley
-        ARRIVED_SPINUP_WAIT_3,     // spinup gate
-        FIRE_THREE_3,              // 3-ball volley #3
-
-        DRIVE_PATH10_PARK,         // final park at (21.619, 75.282, 90)
+        ARRIVED_SPINUP_WAIT_2,     // spinup gate again
+        FIRE_THREE_2,              // 3-ball #2
+        DRIVE_PATH6_PARK,          // park
         DONE
     }
     private Phase phase = Phase.DRIVE_PATH1_SCAN;
@@ -112,7 +103,6 @@ public class BlueCloseAuto extends LinearOpMode {
     // launch triggers (prevent retriggering)
     private boolean launch1Started = false;
     private boolean launch2Started = false;
-    private boolean launch3Started = false;
 
     @Override
     public void runOpMode() {
@@ -124,7 +114,7 @@ public class BlueCloseAuto extends LinearOpMode {
 
         indexer = new Indexer("Indexer", "camServo");
         indexer.init(hardwareMap);
-        indexer.hardZero();   // ensure Auto starts from encoder = 0
+        indexer.hardZero();   // start Auto from encoder = 0
 
         flywheel = new Flywheel("flywheelRight", "flywheelLeft");
         flywheel.init(hardwareMap);
@@ -138,10 +128,10 @@ public class BlueCloseAuto extends LinearOpMode {
         follower.setStartingPose(START_POSE);
         paths = new Paths(follower); // build AFTER setting starting pose
 
-        telemetry.addLine("CloseRangeAuto: Ready. Will detect tags after Path1 during RUN.");
+        telemetry.addLine("RedCloseAuto: Ready. Will detect tags after Path1 during RUN.");
         telemetry.update();
 
-        // ===== INIT loop (no tag detection—can’t see yet) =====
+        // ===== INIT loop =====
         while (!isStarted() && !isStopRequested()) {
             telemetry.addData("Start Pose", poseStr(START_POSE));
             telemetry.update();
@@ -164,7 +154,7 @@ public class BlueCloseAuto extends LinearOpMode {
             flywheel.update(dt);
             indexer.update(dt);
             follower.update();
-            intakeUpdate(dt); // handles the first intake "burst" timer if used
+            intakeUpdate(dt);
 
             switch (phase) {
                 case DRIVE_PATH1_SCAN: {
@@ -213,7 +203,7 @@ public class BlueCloseAuto extends LinearOpMode {
 
                     path2WaitS += dt;
 
-                    // Only proceed once Path2 complete/timed-out AND all pre-advances are done
+                    // Only proceed once Path2 is done AND pre-advances are completed
                     boolean path2Done = (!follower.isBusy() || path2WaitS >= PATH2_MAX_WAIT_S);
                     if (path2Done && preAdvanceRemaining == 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         turn1ElapsedS = 0.0;
@@ -303,65 +293,13 @@ public class BlueCloseAuto extends LinearOpMode {
                         launch2Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // === NEW: second intake cycle ===
-                        follower.followPath(paths.Path7, true); // to Align2
-                        phase = Phase.DRIVE_PATH7_ALIGN2;
+                        follower.followPath(paths.Path6, true);
+                        phase = Phase.DRIVE_PATH6_PARK;
                     }
                     break;
                 }
 
-                case DRIVE_PATH7_ALIGN2: {
-                    if (!follower.isBusy()) {
-                        intakeStart();
-                        intakeHoldAfterPathS = 0.0;
-                        follower.followPath(paths.Path8, true); // to Intake2
-                        phase = Phase.INTAKE_PATH8_BURST2;
-                    }
-                    break;
-                }
-
-                case INTAKE_PATH8_BURST2: {
-                    if (!follower.isBusy()) {
-                        // small hold at intake to be sure balls are captured
-                        intakeHoldAfterPathS += dt;
-                        if (intakeHoldAfterPathS >= INTAKE_EXTRA_HOLD_S) {
-                            intakeStop();
-                            follower.followPath(paths.Path9, true); // back to launch pose
-                            phase = Phase.DRIVE_PATH9_TO_LAUNCH2;
-                        }
-                    }
-                    break;
-                }
-
-                case DRIVE_PATH9_TO_LAUNCH2: {
-                    if (!follower.isBusy()) {
-                        spinupElapsedS = 0.0;
-                        phase = Phase.ARRIVED_SPINUP_WAIT_3;
-                    }
-                    break;
-                }
-
-                case ARRIVED_SPINUP_WAIT_3: {
-                    spinupElapsedS += dt;
-                    if (flywheelReady() || spinupElapsedS >= SPINUP_TIMEOUT_S) {
-                        phase = Phase.FIRE_THREE_3;
-                    }
-                    break;
-                }
-
-                case FIRE_THREE_3: {
-                    if (!launch3Started) {
-                        indexer.startAutoLaunchAllThree();
-                        launch3Started = true;
-                    }
-                    if (!indexer.isAutoRunning()) {
-                        follower.followPath(paths.Path10, true); // final park
-                        phase = Phase.DRIVE_PATH10_PARK;
-                    }
-                    break;
-                }
-
-                case DRIVE_PATH10_PARK: {
+                case DRIVE_PATH6_PARK: {
                     if (!follower.isBusy()) {
                         phase = Phase.DONE;
                     }
@@ -415,8 +353,7 @@ public class BlueCloseAuto extends LinearOpMode {
     private void intakeUpdate(double dt) {
         if (!intakeActive) return;
         intakeTimerS += dt;
-        // Only the FIRST intake leg uses the timed burst; second leg uses hold-after-arrival only.
-        if (phase == Phase.INTAKE_PATH4_BURST && intakeTimerS >= INTAKE_BURST_S) {
+        if (intakeTimerS >= INTAKE_BURST_S) {
             intakeStop();
         }
     }
@@ -424,7 +361,6 @@ public class BlueCloseAuto extends LinearOpMode {
     private void intakeStop() {
         intakeActive = false;
         intakeTimerS = 0.0;
-        intakeHoldAfterPathS = 0.0;
         intakeMotor.setPower(0.0);
     }
 
@@ -447,101 +383,71 @@ public class BlueCloseAuto extends LinearOpMode {
         return err;
     }
 
-    // ===== Paths (added Path7–Path10) =====
+    // ===== Mirrored paths & headings (mirror x across 72: x' = 144 - x; heading' = 180° - heading) =====
     public static class Paths {
-        public PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8, Path9, Path10;
+        public PathChain Path1, Path2, Path3, Path4, Path5, Path6;
 
         public Paths(Follower follower) {
-            // Path1: (20.65,121.61, 54°) → (48,96, 65°)
+            final double EPS = 0.01;
+
+            // Blue Path1: (20.65,121.61, 54°) → (48,96, 65°)
+            // Red Path1 : (123.35,121.61,126°) → (96,96,115°)
             Path1 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(20.65, 121.61, Math.toRadians(54)),
-                            new Pose(48.00,  96.00,  Math.toRadians(65))
+                            new Pose(123.35, 121.61, Math.toRadians(126)),
+                            new Pose( 96.00,  96.00, Math.toRadians(115))
                     ))
-                    .setLinearHeadingInterpolation(Math.toRadians(54), Math.toRadians(65))
+                    .setLinearHeadingInterpolation(Math.toRadians(126), Math.toRadians(115))
                     .build();
 
-            // Path2: (48,96, 65°) → (48,96, 135°)  (epsilon move so follower completes)
-            final double EPS = 0.01; // 0.01 inch nudge
+            // Blue Path2: (48,96, 65°) → (48,96, 150°) (epsilon)
+            // Red Path2 : (96,96,115°) → (96+eps,96, 30°)
             Path2 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(48.00, 96.00, Math.toRadians(65)),
-                            new Pose(48.00 + EPS, 96.00, Math.toRadians(155)) // use 155° to ensure turn completion like before
+                            new Pose( 96.00,  96.00, Math.toRadians(115)),
+                            new Pose( 96.00 + EPS, 96.00, Math.toRadians(30))
                     ))
-                    .setLinearHeadingInterpolation(Math.toRadians(65), Math.toRadians(155))
+                    .setLinearHeadingInterpolation(Math.toRadians(115), Math.toRadians(30))
                     .build();
 
-            // Path3: (48,96, 135°) → (26.64,109.25, 270°)
+            // Blue Path3: (48,96,150°) → (26.64,109.25,270°)
+            // Red Path3 : (96,96, 30°) → (117.36,109.25,270°)
             Path3 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(48.00,  96.00,  Math.toRadians(155)),
-                            new Pose(26.64, 109.25,  Math.toRadians(270))
+                            new Pose( 96.00,  96.00, Math.toRadians(30)),
+                            new Pose(117.36, 109.25, Math.toRadians(270))
                     ))
-                    .setLinearHeadingInterpolation(Math.toRadians(155), Math.toRadians(270))
+                    .setLinearHeadingInterpolation(Math.toRadians(30), Math.toRadians(270))
                     .build();
 
-            // Path4: (26.64,109.25, 270°) → (26.64,86.86, 270°)
+            // Blue Path4: (26.64,109.25,270°) → (26.64,86.86,270°)
+            // Red Path4 : (117.36,109.25,270°) → (117.36,86.86,270°)
             Path4 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(26.64, 109.25, Math.toRadians(270)),
-                            new Pose(26.64,  86.86, Math.toRadians(270))
+                            new Pose(117.36, 109.25, Math.toRadians(270)),
+                            new Pose(117.36,  86.86, Math.toRadians(270))
                     ))
                     .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(270))
                     .build();
 
-            // Path5: (26.64,86.86, 270°) → (48,96, 135°)
+            // Blue Path5: (26.64,86.86,270°) → (48,96,135°)
+            // Red Path5 : (117.36,86.86,270°) → (96,96,45°)
             Path5 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(26.64,  86.86, Math.toRadians(270)),
-                            new Pose(48.00,  96.00, Math.toRadians(135))
+                            new Pose(117.36,  86.86, Math.toRadians(270)),
+                            new Pose( 96.00,  96.00, Math.toRadians(45))
                     ))
-                    .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(135))
+                    .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(45))
                     .build();
 
-            // Path6 (old park step) is kept but no longer used for parking; we jump to Path7 next
+            // Blue Path6: (48,96,135°) → (28.96,73.35,260°)
+            // Red Path6 : (96,96, 45°) → (115.04,73.35,280°)
             Path6 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(48.00,  96.00,  Math.toRadians(135)),
-                            new Pose(28.96,  73.35,  Math.toRadians(260))
+                            new Pose( 96.00,  96.00, Math.toRadians(45)),
+                            new Pose(115.04,  73.35, Math.toRadians(280))
                     ))
-                    .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(260))
-                    .build();
-
-            // ===== NEW SEQUENCE =====
-            // Path7: to second intake align (26.638, 75, 270°)
-            Path7 = follower.pathBuilder()
-                    .addPath(new BezierLine(
-                            new Pose(48.00, 96.00, Math.toRadians(135)),
-                            new Pose(26.638, 85.000, Math.toRadians(270))
-                    ))
-                    .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(270))
-                    .build();
-
-            // Path8: to second intake pose (26.638, 62, 270°)
-            Path8 = follower.pathBuilder()
-                    .addPath(new BezierLine(
-                            new Pose(26.638, 85.000, Math.toRadians(270)),
-                            new Pose(26.638, 62.000, Math.toRadians(270))
-                    ))
-                    .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(270))
-                    .build();
-
-            // Path9: back to launch (48, 96, 135°)
-            Path9 = follower.pathBuilder()
-                    .addPath(new BezierLine(
-                            new Pose(26.638, 62.000, Math.toRadians(270)),
-                            new Pose(48.000, 96.000,  Math.toRadians(135))
-                    ))
-                    .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(135))
-                    .build();
-
-            // Path10: final park (21.619, 75.282, 90°)
-            Path10 = follower.pathBuilder()
-                    .addPath(new BezierLine(
-                            new Pose(48.000, 96.000,  Math.toRadians(135)),
-                            new Pose(27, 75.282,  Math.toRadians(90))
-                    ))
-                    .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(90))
+                    .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(280))
                     .build();
         }
     }

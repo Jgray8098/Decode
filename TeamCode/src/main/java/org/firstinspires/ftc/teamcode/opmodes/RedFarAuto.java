@@ -16,8 +16,8 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "BlueFarAuto", group = "Comp")
-public class BlueFarAuto extends LinearOpMode {
+@Autonomous(name = "RedFarAuto", group = "Comp")
+public class RedFarAuto extends LinearOpMode {
 
     // === Limelight pipelines ===
     private static final int PIPE_OBELISK_1 = 2; // Tag 21 = GPP
@@ -34,25 +34,13 @@ public class BlueFarAuto extends LinearOpMode {
     private static final double SPINUP_TIMEOUT_S  = 2.50;
     private static final double RPM_TOL           = 75.0;
 
-    // === Poses (inches, radians) ===
-    private static final Pose START_POSE  = new Pose(61.96,  9.27, Math.toRadians(90.0));
-    private static final Pose TARGET_POSE = new Pose(60.61, 22.94, Math.toRadians(120.0));
+    // === Mirrored poses (inches, radians) ===
+    private static final Pose START_POSE        = new Pose(82.04,  9.27, Math.toRadians(90.0));   // mirror of (61.96,9.27,90)
+    private static final Pose TARGET_POSE       = new Pose(83.39, 22.94, Math.toRadians(60.0));   // mirror of (60.61,22.94,120)
 
-    // NEW: second-shot heading offset (deg). Positive = CCW (aim more left), negative = CW (aim more right).
-    // Tune this on-field; typical tweak is between -5° and +5°.
-    private static final double SECOND_SHOT_HEADING_OFFSET_DEG = -7.0;
-
-    // Build a second-shot pose: SAME XY as TARGET_POSE, but heading nudged by offset
-    private static final Pose TARGET_POSE_2 = new Pose(
-            TARGET_POSE.getX(),
-            TARGET_POSE.getY(),
-            TARGET_POSE.getHeading() + Math.toRadians(SECOND_SHOT_HEADING_OFFSET_DEG)
-    );
-
-    // Additional scoring path poses
-    private static final Pose INTAKE_ALIGN_POSE = new Pose(26.06, 22.00, Math.toRadians(90.0));
-    private static final Pose INTAKE_POSE       = new Pose(26.06, 32.82, Math.toRadians(90.0));
-    private static final Pose PARK_POSE         = new Pose(26.06, 46.94, Math.toRadians(90.0));
+    private static final Pose INTAKE_ALIGN_POSE = new Pose(117.94, 22.00, Math.toRadians(90.0));  // mirror of (26.06,22.00,90)
+    private static final Pose INTAKE_POSE       = new Pose(117.94, 32.82, Math.toRadians(90.0));  // mirror of (26.06,32.82,90)
+    private static final Pose PARK_POSE         = new Pose(117.94, 46.94, Math.toRadians(90.0));  // mirror of (26.06,46.94,90)
 
     // === Intake controls ===
     private static final double INTAKE_POWER_IN      = 1.0;
@@ -69,7 +57,7 @@ public class BlueFarAuto extends LinearOpMode {
     private PathChain pathToShot;
     private PathChain pathToAlign;
     private PathChain pathToIntake;
-    private PathChain pathBackToShot;  // uses TARGET_POSE_2 heading
+    private PathChain pathBackToShot;
     private PathChain pathToPark;
 
     // INIT cycling state
@@ -96,7 +84,7 @@ public class BlueFarAuto extends LinearOpMode {
         FIRE_THREE_1,             // first 3-ball volley
         DRIVE_ALIGN,              // to INTAKE_ALIGN_POSE
         INTAKE_MOVE,              // intake ON and drive to INTAKE_POSE (+ extra hold)
-        DRIVE_BACK_TO_SHOT,       // drive back to TARGET_POSE (XY) but aim with TARGET_POSE_2 heading
+        DRIVE_BACK_TO_SHOT,       // drive back to TARGET_POSE
         ARRIVED_SPINUP_WAIT_2,    // spin up for second volley
         FIRE_THREE_2,             // second 3-ball volley
         DRIVE_PARK,               // drive to PARK_POSE
@@ -143,10 +131,9 @@ public class BlueFarAuto extends LinearOpMode {
                 .setLinearHeadingInterpolation(INTAKE_ALIGN_POSE.getHeading(), INTAKE_POSE.getHeading())
                 .build();
 
-        // IMPORTANT: we drive back to the same XY (TARGET_POSE) but interpolate heading to TARGET_POSE_2.getHeading()
         pathBackToShot = follower.pathBuilder()
-                .addPath(new BezierLine(INTAKE_POSE, TARGET_POSE)) // XY identical to first shot
-                .setLinearHeadingInterpolation(INTAKE_POSE.getHeading(), TARGET_POSE_2.getHeading())
+                .addPath(new BezierLine(INTAKE_POSE, TARGET_POSE))
+                .setLinearHeadingInterpolation(INTAKE_POSE.getHeading(), TARGET_POSE.getHeading())
                 .build();
 
         pathToPark = follower.pathBuilder()
@@ -181,11 +168,10 @@ public class BlueFarAuto extends LinearOpMode {
             telemetry.addData("LastValid Pattern", lastSeenPatternText);
             telemetry.addData("LastValid Age (s)", "%.2f", ageSeconds(lastSeenNs));
             telemetry.addData("Pose Start", poseStr(START_POSE));
-            telemetry.addData("Pose Shot1", poseStr(TARGET_POSE));
-            telemetry.addData("Pose Shot2 (offset)", poseStr(TARGET_POSE_2));
+            telemetry.addData("Pose Shot",  poseStr(TARGET_POSE));
             telemetry.addData("Pose Align", poseStr(INTAKE_ALIGN_POSE));
-            telemetry.addData("Pose Intake", poseStr(INTAKE_POSE));
-            telemetry.addData("Pose Park", poseStr(PARK_POSE));
+            telemetry.addData("Pose Intake",poseStr(INTAKE_POSE));
+            telemetry.addData("Pose Park",  poseStr(PARK_POSE));
             telemetry.update();
 
             // Keep cycling so DS sees the randomization live
@@ -289,7 +275,7 @@ public class BlueFarAuto extends LinearOpMode {
                         intakeHoldAfterPathS += dt;
                         if (intakeHoldAfterPathS >= INTAKE_EXTRA_HOLD_S) {
                             intakeStop();
-                            follower.followPath(pathBackToShot, true); // returns to TARGET_POSE XY, aims with TARGET_POSE_2 heading
+                            follower.followPath(pathBackToShot, true);
                             phase = Phase.DRIVE_BACK_TO_SHOT;
                         }
                     }
@@ -355,7 +341,8 @@ public class BlueFarAuto extends LinearOpMode {
             telemetry.addData("Indexer Moving", indexer.isMoving());
             telemetry.addData("Pedro Pose", poseStr(follower.getPose()));
             telemetry.addData("Pedro Busy", follower.isBusy());
-            telemetry.addData("Second Shot Heading Offset", "%.1f°", SECOND_SHOT_HEADING_OFFSET_DEG);
+            telemetry.addData("Intake Active", intakeActive);
+            telemetry.addData("Intake Hold (s)", "%.2f", intakeHoldAfterPathS);
             telemetry.update();
         }
 
@@ -393,7 +380,7 @@ public class BlueFarAuto extends LinearOpMode {
 
     /** Map tag to how many forward slots we must advance before firing. */
     private int computePreAdvanceFromTid(int tid) {
-        // Preload order is P,P, G with P at firing position at start.
+        // Preload order is P,P,G with P at firing position at start.
         // Tag 23 = PPG → already correct → advance 0
         // Tag 22 = PGP → advance 1
         // Tag 21 = GPP → advance 2
