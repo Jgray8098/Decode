@@ -33,15 +33,23 @@ public class BlueCloseAuto extends LinearOpMode {
     private static final double RPM_TOL           = 60.0;
 
     // ===== Turn settle gate (before first volley) =====
-    private static final double TURN1_TARGET_DEG     = 135.0; // Path2 ending heading
-    private static final double TURN1_HEADING_TOL_DEG= 2.0;   // ±2°
-    private static final double TURN1_MIN_SETTLE_S   = 0.30;  // 300 ms
-    private static final double TURN1_TIMEOUT_S      = 1.00;  // safety fallback
+    private static final double TURN1_TARGET_DEG      = 135.0; // Path2 ending heading
+    private static final double TURN1_HEADING_TOL_DEG = 2.0;   // ±2°
+    private static final double TURN1_MIN_SETTLE_S    = 0.30;  // 300 ms
+    private static final double TURN1_TIMEOUT_S       = 1.00;  // safety fallback
 
     // ===== Intake controls =====
-    private static final double INTAKE_POWER_IN = 1.0;
-    private static final double INTAKE_BURST_S  = 3.00; // first intake leg extra time
-    private static final double INTAKE_EXTRA_HOLD_S = 0.60; // extra hold after arriving at each intake pose
+    private static final double INTAKE_POWER_IN        = 1.0;
+    private static final double INTAKE_BURST_S         = 3.00; // first intake leg extra time
+    private static final double INTAKE_EXTRA_HOLD_S    = 0.60; // extra hold after arriving at each intake pose
+
+    // Reverse "burp" pulse (to avoid overfilling when returning to launch)
+    private static final double REVERSE_POWER_OUT      = -1.0;
+    private static final double REVERSE_PULSE_S        = 0.35; // duration of the reverse pulse itself
+
+    // Delay + distance gates before reverse "burp" actually starts
+    private static final double REVERSE_ARM_DELAY_S    = 0.35; // wait this long into the return path
+    private static final double REVERSE_MIN_TRAVEL_IN  = 6.0;  // and after moving this many inches
 
     // ===== Path2 safety (in-place heading change) =====
     private static final double PATH2_MAX_WAIT_S = 0.75; // timeout guard if follower stays busy
@@ -69,10 +77,19 @@ public class BlueCloseAuto extends LinearOpMode {
     private int preAdvanceTotal = 0;
     private int preAdvanceRemaining = 0;
 
-    // Intake control
+    // Intake forward control
     private boolean intakeActive = false;
     private double intakeTimerS = 0.0;          // used by first intake burst
     private double intakeHoldAfterPathS = 0.0;  // used by both intake legs
+
+    // Intake reverse pulse control
+    private boolean reversePulseActive = false;
+    private double  reversePulseTimerS = 0.0;
+
+    // Reverse-pulse arming (delay + distance into return path)
+    private boolean reverseArmed = false;
+    private double  reverseArmTimerS = 0.0;
+    private Pose    reverseArmStartPose = null;
 
     // Spin-up timing
     private double spinupElapsedS = 0.0;
@@ -93,14 +110,14 @@ public class BlueCloseAuto extends LinearOpMode {
         FIRE_THREE_1,              // 3-ball volley #1
         DRIVE_PATH3_ALIGN,         // to intake align (leg 1)
         INTAKE_PATH4_BURST,        // follow Path4 while intaking (timed)
-        DRIVE_PATH5_TO_LAUNCH,     // back to launch
+        DRIVE_PATH5_TO_LAUNCH,     // back to launch (return #1, reverse burp armed)
         ARRIVED_SPINUP_WAIT_2,     // spinup gate
         FIRE_THREE_2,              // 3-ball volley #2
 
-        // NEW second intake + third launch sequence:
+        // Second intake + third launch sequence:
         DRIVE_PATH7_ALIGN2,        // to second intake align (26.638, 75, 270)
         INTAKE_PATH8_BURST2,       // to second intake pose (26.638, 62, 270) + hold
-        DRIVE_PATH9_TO_LAUNCH2,    // back to launch for third volley
+        DRIVE_PATH9_TO_LAUNCH2,    // back to launch (return #2, reverse burp armed)
         ARRIVED_SPINUP_WAIT_3,     // spinup gate
         FIRE_THREE_3,              // 3-ball volley #3
 
@@ -164,7 +181,8 @@ public class BlueCloseAuto extends LinearOpMode {
             flywheel.update(dt);
             indexer.update(dt);
             follower.update();
-            intakeUpdate(dt); // handles the first intake "burst" timer if used
+            intakeUpdate(dt);            // forward-intake timers
+            intakeReversePulseUpdate(dt); // reverse-burp timer
 
             switch (phase) {
                 case DRIVE_PATH1_SCAN: {
@@ -275,6 +293,14 @@ public class BlueCloseAuto extends LinearOpMode {
                     // Stop intake after burst time or once path completes
                     if (!follower.isBusy() || !intakeActive) {
                         intakeStop();
+                        // Arm reverse burp; will trigger after delay + distance while driving Path5
+                        reverseArmed = true;
+                        reverseArmTimerS = 0.0;
+                        reverseArmStartPose = new Pose(
+                                follower.getPose().getX(),
+                                follower.getPose().getY(),
+                                follower.getPose().getHeading()
+                        );
                         follower.followPath(paths.Path5, true);
                         phase = Phase.DRIVE_PATH5_TO_LAUNCH;
                     }
@@ -282,7 +308,18 @@ public class BlueCloseAuto extends LinearOpMode {
                 }
 
                 case DRIVE_PATH5_TO_LAUNCH: {
+                    // Trigger reverse burp once we're safely into the path
+                    if (reverseArmed && !reversePulseActive) {
+                        reverseArmTimerS += dt;
+                        double traveled = distanceInches(follower.getPose(), reverseArmStartPose);
+                        if (reverseArmTimerS >= REVERSE_ARM_DELAY_S && traveled >= REVERSE_MIN_TRAVEL_IN) {
+                            intakeReversePulseStart();
+                            reverseArmed = false;
+                        }
+                    }
+
                     if (!follower.isBusy()) {
+                        reverseArmed = false; // disarm if unused
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_WAIT_2;
                     }
@@ -303,7 +340,7 @@ public class BlueCloseAuto extends LinearOpMode {
                         launch2Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // === NEW: second intake cycle ===
+                        // === Second intake cycle ===
                         follower.followPath(paths.Path7, true); // to Align2
                         phase = Phase.DRIVE_PATH7_ALIGN2;
                     }
@@ -326,6 +363,14 @@ public class BlueCloseAuto extends LinearOpMode {
                         intakeHoldAfterPathS += dt;
                         if (intakeHoldAfterPathS >= INTAKE_EXTRA_HOLD_S) {
                             intakeStop();
+                            // Arm reverse burp for the second return path (Path9)
+                            reverseArmed = true;
+                            reverseArmTimerS = 0.0;
+                            reverseArmStartPose = new Pose(
+                                    follower.getPose().getX(),
+                                    follower.getPose().getY(),
+                                    follower.getPose().getHeading()
+                            );
                             follower.followPath(paths.Path9, true); // back to launch pose
                             phase = Phase.DRIVE_PATH9_TO_LAUNCH2;
                         }
@@ -334,7 +379,18 @@ public class BlueCloseAuto extends LinearOpMode {
                 }
 
                 case DRIVE_PATH9_TO_LAUNCH2: {
+                    // Trigger reverse burp once we're safely into the path
+                    if (reverseArmed && !reversePulseActive) {
+                        reverseArmTimerS += dt;
+                        double traveled = distanceInches(follower.getPose(), reverseArmStartPose);
+                        if (reverseArmTimerS >= REVERSE_ARM_DELAY_S && traveled >= REVERSE_MIN_TRAVEL_IN) {
+                            intakeReversePulseStart();
+                            reverseArmed = false;
+                        }
+                    }
+
                     if (!follower.isBusy()) {
+                        reverseArmed = false; // disarm if unused
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_WAIT_3;
                     }
@@ -383,7 +439,10 @@ public class BlueCloseAuto extends LinearOpMode {
             telemetry.addData("FW Target RPM", "%.0f", flywheel.getTargetRpm());
             telemetry.addData("FW Right RPM", "%.0f", flywheel.getMeasuredRightRpm());
             telemetry.addData("FW Left RPM", "%.0f", flywheel.getMeasuredLeftRpm());
-            telemetry.addData("Intake Active", intakeActive);
+            telemetry.addData("Intake Active (fwd)", intakeActive);
+            telemetry.addData("Reverse Armed", reverseArmed);
+            telemetry.addData("Reverse Active", reversePulseActive);
+            telemetry.addData("Reverse Arm t (s)", "%.2f", reverseArmTimerS);
             telemetry.addData("Path2 Wait (s)", "%.2f", path2WaitS);
             telemetry.addData("Turn1 Elapsed/Stable (s)", "%.2f / %.2f", turn1ElapsedS, turn1StableS);
             telemetry.addData("Heading Deg", "%.1f", Math.toDegrees(follower.getPose().getHeading()));
@@ -392,7 +451,7 @@ public class BlueCloseAuto extends LinearOpMode {
         }
 
         // Safety
-        intakeStop();
+        intakeAllStop();
         indexer.setCamOpen(false);
         flywheel.stop();
     }
@@ -425,7 +484,39 @@ public class BlueCloseAuto extends LinearOpMode {
         intakeActive = false;
         intakeTimerS = 0.0;
         intakeHoldAfterPathS = 0.0;
+        if (!reversePulseActive) { // don't stomp reverse pulse if it's running
+            intakeMotor.setPower(0.0);
+        }
+    }
+
+    private void intakeAllStop() {
+        intakeActive = false;
+        reversePulseActive = false;
+        reverseArmed = false;
+        intakeTimerS = 0.0;
+        intakeHoldAfterPathS = 0.0;
         intakeMotor.setPower(0.0);
+    }
+
+    // Reverse-pulse controls
+    private void intakeReversePulseStart() {
+        reversePulseActive = true;
+        reversePulseTimerS = 0.0;
+        intakeMotor.setPower(REVERSE_POWER_OUT);
+    }
+
+    private void intakeReversePulseUpdate(double dt) {
+        if (!reversePulseActive) return;
+        reversePulseTimerS += dt;
+        if (reversePulseTimerS >= REVERSE_PULSE_S) {
+            reversePulseActive = false;
+            // Stop motor *only* if we aren't also intaking forward
+            if (!intakeActive) {
+                intakeMotor.setPower(0.0);
+            } else {
+                intakeMotor.setPower(INTAKE_POWER_IN);
+            }
+        }
     }
 
     /** Map tag → pre-advance 0/1/2. */
@@ -439,6 +530,12 @@ public class BlueCloseAuto extends LinearOpMode {
     private static String poseStr(Pose p) {
         return String.format("(%.2f, %.2f, %.1f°)",
                 p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
+    }
+
+    private static double distanceInches(Pose a, Pose b) {
+        double dx = a.getX() - b.getX();
+        double dy = a.getY() - b.getY();
+        return Math.hypot(dx, dy);
     }
 
     /** Smallest signed angle error between two headings (degrees). */
@@ -466,7 +563,7 @@ public class BlueCloseAuto extends LinearOpMode {
             Path2 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose(48.00, 96.00, Math.toRadians(65)),
-                            new Pose(48.00 + EPS, 96.00, Math.toRadians(155)) // use 155° to ensure turn completion like before
+                            new Pose(48.00 + EPS, 96.00, Math.toRadians(155)) // use 155° to ensure turn completion
                     ))
                     .setLinearHeadingInterpolation(Math.toRadians(65), Math.toRadians(155))
                     .build();
@@ -498,7 +595,7 @@ public class BlueCloseAuto extends LinearOpMode {
                     .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(135))
                     .build();
 
-            // Path6 (old park step) is kept but no longer used for parking; we jump to Path7 next
+            // Path6 (old park step) is kept but unused now
             Path6 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose(48.00,  96.00,  Math.toRadians(135)),
@@ -507,8 +604,7 @@ public class BlueCloseAuto extends LinearOpMode {
                     .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(260))
                     .build();
 
-            // ===== NEW SEQUENCE =====
-            // Path7: to second intake align (26.638, 75, 270°)
+            // Path7: to second intake align (26.638, 75, 270°) – slight overshoot to 85 to be safe then down
             Path7 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose(48.00, 96.00, Math.toRadians(135)),

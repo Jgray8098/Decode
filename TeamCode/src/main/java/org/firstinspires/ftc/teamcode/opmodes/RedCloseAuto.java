@@ -33,18 +33,24 @@ public class RedCloseAuto extends LinearOpMode {
     private static final double RPM_TOL           = 60.0;
 
     // ===== Turn settle gate (before first volley) =====
-    // Mirrored from Blue (Path2 ending heading was 150° -> mirror is 30°)
+    // Mirrored from Blue (Blue ~155° end turn; Red target is 30°)
     private static final double TURN1_TARGET_DEG      = 30.0;
     private static final double TURN1_HEADING_TOL_DEG = 2.0;   // ±2°
     private static final double TURN1_MIN_SETTLE_S    = 0.30;  // 300 ms
     private static final double TURN1_TIMEOUT_S       = 1.00;  // safety fallback
 
-    // ===== Intake (Path4 burst) =====
-    private static final double INTAKE_POWER_IN = 1.0;
-    private static final double INTAKE_BURST_S  = 3.00;
+    // ===== Intake controls =====
+    private static final double INTAKE_POWER_IN       = 1.0;
+    private static final double INTAKE_BURST_S        = 3.00; // first intake down-leg extra time
+    private static final double INTAKE_EXTRA_HOLD_S   = 0.60; // hold after arriving at each intake pose
+
+    // ===== Intake reverse "burp" controls =====
+    private static final double INTAKE_POWER_REV      = -0.7;  // reverse power
+    private static final double REVERSE_PULSE_S       = 0.25;  // how long to reverse
+    private static final double REVERSE_DELAY_S       = 0.75;  // delay after starting drive-back before reverse starts
 
     // ===== Path2 safety (in-place heading change) =====
-    private static final double PATH2_MAX_WAIT_S = 0.75; // timeout guard if follower stays busy
+    private static final double PATH2_MAX_WAIT_S = 0.75;
 
     // ===== Devices =====
     private Limelight3A limelight;
@@ -71,7 +77,14 @@ public class RedCloseAuto extends LinearOpMode {
 
     // Intake control
     private boolean intakeActive = false;
-    private double intakeTimerS = 0.0;
+    private double intakeTimerS = 0.0;          // used by first intake burst
+    private double intakeHoldAfterPathS = 0.0;  // used by both intake legs
+
+    // Intake reverse state
+    private boolean reversePulseActive = false;
+    private boolean reversePulseArmed  = false;
+    private double reversePulseTimerS  = 0.0;
+    private double reverseDelayTimerS  = 0.0;
 
     // Spin-up timing
     private double spinupElapsedS = 0.0;
@@ -88,14 +101,21 @@ public class RedCloseAuto extends LinearOpMode {
         DETECT_TAG,                // cycle 2/3/4 until 21/22/23
         DRIVE_PATH2_TO_LAUNCH,     // to launch pose; pre-advance while driving
         TURN_SETTLE_1,             // ensure heading settled at 30° before spin-up
-        ARRIVED_SPINUP_WAIT_1,     // close-range spinup gate
-        FIRE_THREE_1,              // 3-ball #1
-        DRIVE_PATH3_ALIGN,         // to intake align
+        ARRIVED_SPINUP_WAIT_1,     // spinup gate
+        FIRE_THREE_1,              // volley #1
+        DRIVE_PATH3_ALIGN,         // to intake align (leg 1)
         INTAKE_PATH4_BURST,        // follow Path4 while intaking (timed)
-        DRIVE_PATH5_TO_LAUNCH,     // back to launch
-        ARRIVED_SPINUP_WAIT_2,     // spinup gate again
-        FIRE_THREE_2,              // 3-ball #2
-        DRIVE_PATH6_PARK,          // park
+        DRIVE_PATH5_TO_LAUNCH,     // back to launch (reverse burp #1)
+        ARRIVED_SPINUP_WAIT_2,     // spinup gate
+        FIRE_THREE_2,              // volley #2
+
+        // NEW: second intake + third launch + park
+        DRIVE_PATH7_ALIGN2,        // to second intake align
+        INTAKE_PATH8_BURST2,       // to second intake pose + hold
+        DRIVE_PATH9_TO_LAUNCH2,    // back to launch (reverse burp #2)
+        ARRIVED_SPINUP_WAIT_3,     // spinup gate
+        FIRE_THREE_3,              // volley #3
+        DRIVE_PATH10_PARK,         // final park
         DONE
     }
     private Phase phase = Phase.DRIVE_PATH1_SCAN;
@@ -103,6 +123,7 @@ public class RedCloseAuto extends LinearOpMode {
     // launch triggers (prevent retriggering)
     private boolean launch1Started = false;
     private boolean launch2Started = false;
+    private boolean launch3Started = false;
 
     @Override
     public void runOpMode() {
@@ -154,12 +175,12 @@ public class RedCloseAuto extends LinearOpMode {
             flywheel.update(dt);
             indexer.update(dt);
             follower.update();
-            intakeUpdate(dt);
+            intakeUpdate(dt);          // forward intake burst logic (first cycle)
+            maybeTriggerReverseBurp(dt); // reverse burp logic when armed
 
             switch (phase) {
                 case DRIVE_PATH1_SCAN: {
                     if (!follower.isBusy()) {
-                        // arrive at scan position → start cycling pipelines
                         activePipeline = PIPE_OBELISK_1;
                         llVision.setPipeline(activePipeline);
                         lastPipeSwapNs = System.nanoTime();
@@ -169,7 +190,6 @@ public class RedCloseAuto extends LinearOpMode {
                 }
 
                 case DETECT_TAG: {
-                    // Cycle pipelines 2→3→4 every ~50ms until we see 21/22/23
                     long now = System.nanoTime();
                     if ((now - lastPipeSwapNs) / 1e6 > 50) {
                         activePipeline = (activePipeline == PIPE_OBELISK_1)
@@ -186,7 +206,7 @@ public class RedCloseAuto extends LinearOpMode {
                             preAdvanceTotal = computePreAdvanceFromTid(detectedTid);
                             preAdvanceRemaining = preAdvanceTotal;
 
-                            follower.followPath(paths.Path2, true); // to launch (epsilon move + turn)
+                            follower.followPath(paths.Path2, true);
                             path2WaitS = 0.0;
                             phase = Phase.DRIVE_PATH2_TO_LAUNCH;
                         }
@@ -195,7 +215,6 @@ public class RedCloseAuto extends LinearOpMode {
                 }
 
                 case DRIVE_PATH2_TO_LAUNCH: {
-                    // kick off next pre-advance if needed and we're free
                     if (preAdvanceRemaining > 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         indexer.advanceOneSlot();
                         preAdvanceRemaining--;
@@ -203,7 +222,6 @@ public class RedCloseAuto extends LinearOpMode {
 
                     path2WaitS += dt;
 
-                    // Only proceed once Path2 is done AND pre-advances are completed
                     boolean path2Done = (!follower.isBusy() || path2WaitS >= PATH2_MAX_WAIT_S);
                     if (path2Done && preAdvanceRemaining == 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         turn1ElapsedS = 0.0;
@@ -253,7 +271,6 @@ public class RedCloseAuto extends LinearOpMode {
 
                 case DRIVE_PATH3_ALIGN: {
                     if (!follower.isBusy()) {
-                        // start intake and follow Path4 (downward)
                         intakeStart();
                         follower.followPath(paths.Path4, true);
                         phase = Phase.INTAKE_PATH4_BURST;
@@ -262,10 +279,11 @@ public class RedCloseAuto extends LinearOpMode {
                 }
 
                 case INTAKE_PATH4_BURST: {
-                    // Stop intake after burst time or once path completes
                     if (!follower.isBusy() || !intakeActive) {
                         intakeStop();
                         follower.followPath(paths.Path5, true);
+                        // Arm reverse burp for the first "back to launch" drive
+                        armReverseBurp();
                         phase = Phase.DRIVE_PATH5_TO_LAUNCH;
                     }
                     break;
@@ -293,13 +311,66 @@ public class RedCloseAuto extends LinearOpMode {
                         launch2Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        follower.followPath(paths.Path6, true);
-                        phase = Phase.DRIVE_PATH6_PARK;
+                        // === NEW second intake cycle ===
+                        follower.followPath(paths.Path7, true); // to Align2
+                        phase = Phase.DRIVE_PATH7_ALIGN2;
                     }
                     break;
                 }
 
-                case DRIVE_PATH6_PARK: {
+                case DRIVE_PATH7_ALIGN2: {
+                    if (!follower.isBusy()) {
+                        intakeStart();
+                        intakeHoldAfterPathS = 0.0;
+                        follower.followPath(paths.Path8, true); // to Intake2
+                        phase = Phase.INTAKE_PATH8_BURST2;
+                    }
+                    break;
+                }
+
+                case INTAKE_PATH8_BURST2: {
+                    if (!follower.isBusy()) {
+                        intakeHoldAfterPathS += dt;
+                        if (intakeHoldAfterPathS >= INTAKE_EXTRA_HOLD_S) {
+                            intakeStop();
+                            follower.followPath(paths.Path9, true); // back to launch
+                            // Arm reverse burp for second "back to launch" drive
+                            armReverseBurp();
+                            phase = Phase.DRIVE_PATH9_TO_LAUNCH2;
+                        }
+                    }
+                    break;
+                }
+
+                case DRIVE_PATH9_TO_LAUNCH2: {
+                    if (!follower.isBusy()) {
+                        spinupElapsedS = 0.0;
+                        phase = Phase.ARRIVED_SPINUP_WAIT_3;
+                    }
+                    break;
+                }
+
+                case ARRIVED_SPINUP_WAIT_3: {
+                    spinupElapsedS += dt;
+                    if (flywheelReady() || spinupElapsedS >= SPINUP_TIMEOUT_S) {
+                        phase = Phase.FIRE_THREE_3;
+                    }
+                    break;
+                }
+
+                case FIRE_THREE_3: {
+                    if (!launch3Started) {
+                        indexer.startAutoLaunchAllThree();
+                        launch3Started = true;
+                    }
+                    if (!indexer.isAutoRunning()) {
+                        follower.followPath(paths.Path10, true); // final park
+                        phase = Phase.DRIVE_PATH10_PARK;
+                    }
+                    break;
+                }
+
+                case DRIVE_PATH10_PARK: {
                     if (!follower.isBusy()) {
                         phase = Phase.DONE;
                     }
@@ -322,6 +393,9 @@ public class RedCloseAuto extends LinearOpMode {
             telemetry.addData("FW Right RPM", "%.0f", flywheel.getMeasuredRightRpm());
             telemetry.addData("FW Left RPM", "%.0f", flywheel.getMeasuredLeftRpm());
             telemetry.addData("Intake Active", intakeActive);
+            telemetry.addData("Intake Hold (s)", "%.2f", intakeHoldAfterPathS);
+            telemetry.addData("Reverse Armed", reversePulseArmed);
+            telemetry.addData("Reverse Active", reversePulseActive);
             telemetry.addData("Path2 Wait (s)", "%.2f", path2WaitS);
             telemetry.addData("Turn1 Elapsed/Stable (s)", "%.2f / %.2f", turn1ElapsedS, turn1StableS);
             telemetry.addData("Heading Deg", "%.1f", Math.toDegrees(follower.getPose().getHeading()));
@@ -347,13 +421,17 @@ public class RedCloseAuto extends LinearOpMode {
     private void intakeStart() {
         intakeActive = true;
         intakeTimerS = 0.0;
-        intakeMotor.setPower(INTAKE_POWER_IN);
+        // If a reverse pulse is currently active, let it control power.
+        if (!reversePulseActive) {
+            intakeMotor.setPower(INTAKE_POWER_IN);
+        }
     }
 
     private void intakeUpdate(double dt) {
         if (!intakeActive) return;
         intakeTimerS += dt;
-        if (intakeTimerS >= INTAKE_BURST_S) {
+        // Only the FIRST intake leg uses the timed burst; second leg uses hold-after-arrival only.
+        if (phase == Phase.INTAKE_PATH4_BURST && intakeTimerS >= INTAKE_BURST_S) {
             intakeStop();
         }
     }
@@ -361,7 +439,57 @@ public class RedCloseAuto extends LinearOpMode {
     private void intakeStop() {
         intakeActive = false;
         intakeTimerS = 0.0;
-        intakeMotor.setPower(0.0);
+        intakeHoldAfterPathS = 0.0;
+        // If reverse pulse is not active, stop the motor.
+        if (!reversePulseActive) {
+            intakeMotor.setPower(0.0);
+        }
+    }
+
+    // ----- Reverse-burp helpers -----
+
+    private void armReverseBurp() {
+        reversePulseArmed  = true;
+        reversePulseActive = false;
+        reversePulseTimerS = 0.0;
+        reverseDelayTimerS = 0.0;
+        // motor will be off until delay elapses and we start reverse
+    }
+
+    private void intakeReverseStartPulse() {
+        reversePulseActive = true;
+        reversePulseTimerS = 0.0;
+        // Only drive reverse if forward intake isn't currently requested
+        if (!intakeActive) {
+            intakeMotor.setPower(INTAKE_POWER_REV);
+        }
+    }
+
+    /** Called every loop; handles delay and pulse timing when armed. */
+    private void maybeTriggerReverseBurp(double dt) {
+        // If a reverse pulse is running, count it down
+        if (reversePulseActive) {
+            reversePulseTimerS += dt;
+            if (reversePulseTimerS >= REVERSE_PULSE_S) {
+                reversePulseActive = false;
+                reversePulseTimerS = 0.0;
+                // Return motor to 0 only if intake is not forward-running
+                if (!intakeActive) {
+                    intakeMotor.setPower(0.0);
+                }
+            }
+            return;
+        }
+
+        // If armed but not yet started, run the delay
+        if (reversePulseArmed) {
+            reverseDelayTimerS += dt;
+            if (reverseDelayTimerS >= REVERSE_DELAY_S) {
+                reversePulseArmed  = false;
+                reverseDelayTimerS = 0.0;
+                intakeReverseStartPulse();
+            }
+        }
     }
 
     /** Map tag → pre-advance 0/1/2. */
@@ -383,15 +511,14 @@ public class RedCloseAuto extends LinearOpMode {
         return err;
     }
 
-    // ===== Mirrored paths & headings (mirror x across 72: x' = 144 - x; heading' = 180° - heading) =====
+    // ===== Mirrored paths & headings + new Path7–Path10 =====
     public static class Paths {
-        public PathChain Path1, Path2, Path3, Path4, Path5, Path6;
+        public PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8, Path9, Path10;
 
         public Paths(Follower follower) {
             final double EPS = 0.01;
 
-            // Blue Path1: (20.65,121.61, 54°) → (48,96, 65°)
-            // Red Path1 : (123.35,121.61,126°) → (96,96,115°)
+            // Path1 (mirror of Blue Path1): (123.35,121.61,126°) → (96,96,115°)
             Path1 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose(123.35, 121.61, Math.toRadians(126)),
@@ -400,8 +527,7 @@ public class RedCloseAuto extends LinearOpMode {
                     .setLinearHeadingInterpolation(Math.toRadians(126), Math.toRadians(115))
                     .build();
 
-            // Blue Path2: (48,96, 65°) → (48,96, 150°) (epsilon)
-            // Red Path2 : (96,96,115°) → (96+eps,96, 30°)
+            // Path2 (mirror): (96,96,115°) → (96+eps,96, 30°)
             Path2 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose( 96.00,  96.00, Math.toRadians(115)),
@@ -410,44 +536,77 @@ public class RedCloseAuto extends LinearOpMode {
                     .setLinearHeadingInterpolation(Math.toRadians(115), Math.toRadians(30))
                     .build();
 
-            // Blue Path3: (48,96,150°) → (26.64,109.25,270°)
-            // Red Path3 : (96,96, 30°) → (117.36,109.25,270°)
+            // Path3 (mirror): to intake align #1 (~116.36,109.25,270°)
             Path3 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose( 96.00,  96.00, Math.toRadians(30)),
-                            new Pose(117.36, 109.25, Math.toRadians(270))
+                            new Pose(116.36, 109.25, Math.toRadians(270))
                     ))
                     .setLinearHeadingInterpolation(Math.toRadians(30), Math.toRadians(270))
                     .build();
 
-            // Blue Path4: (26.64,109.25,270°) → (26.64,86.86,270°)
-            // Red Path4 : (117.36,109.25,270°) → (117.36,86.86,270°)
+            // Path4 (mirror): down to intake #1 (116.36,86.86,270°)
             Path4 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(117.36, 109.25, Math.toRadians(270)),
-                            new Pose(117.36,  86.86, Math.toRadians(270))
+                            new Pose(116.36, 109.25, Math.toRadians(270)),
+                            new Pose(116.36,  86.86, Math.toRadians(270))
                     ))
                     .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(270))
                     .build();
 
-            // Blue Path5: (26.64,86.86,270°) → (48,96,135°)
-            // Red Path5 : (117.36,86.86,270°) → (96,96,45°)
+            // Path5 (mirror): back to launch (96,96,45°)
             Path5 = follower.pathBuilder()
                     .addPath(new BezierLine(
-                            new Pose(117.36,  86.86, Math.toRadians(270)),
+                            new Pose(116.36,  86.86, Math.toRadians(270)),
                             new Pose( 96.00,  96.00, Math.toRadians(45))
                     ))
                     .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(45))
                     .build();
 
-            // Blue Path6: (48,96,135°) → (28.96,73.35,260°)
-            // Red Path6 : (96,96, 45°) → (115.04,73.35,280°)
+            // Path6 (kept for reference; not used now)
             Path6 = follower.pathBuilder()
                     .addPath(new BezierLine(
                             new Pose( 96.00,  96.00, Math.toRadians(45)),
                             new Pose(115.04,  73.35, Math.toRadians(280))
                     ))
                     .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(280))
+                    .build();
+
+            // ===== NEW MIRRORED SEQUENCE =====
+            // Approx Align2 mirror
+            Path7 = follower.pathBuilder()
+                    .addPath(new BezierLine(
+                            new Pose( 96.000, 96.000, Math.toRadians(45)),
+                            new Pose(114.362, 80.000, Math.toRadians(265))
+                    ))
+                    .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(265))
+                    .build();
+
+            // Intake2 down
+            Path8 = follower.pathBuilder()
+                    .addPath(new BezierLine(
+                            new Pose(114.362, 75.000, Math.toRadians(265)),
+                            new Pose(114.362, 62.000, Math.toRadians(265))
+                    ))
+                    .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(265))
+                    .build();
+
+            // Back to launch (96,96,45°)
+            Path9 = follower.pathBuilder()
+                    .addPath(new BezierLine(
+                            new Pose(114.362, 62.000, Math.toRadians(265)),
+                            new Pose( 96.000, 96.000, Math.toRadians(45))
+                    ))
+                    .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(45))
+                    .build();
+
+            // Final park
+            Path10 = follower.pathBuilder()
+                    .addPath(new BezierLine(
+                            new Pose( 96.000, 96.000, Math.toRadians(45)),
+                            new Pose(115.381, 75.282, Math.toRadians(90))
+                    ))
+                    .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(90))
                     .build();
         }
     }

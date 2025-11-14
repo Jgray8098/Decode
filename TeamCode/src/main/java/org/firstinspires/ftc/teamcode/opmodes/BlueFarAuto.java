@@ -38,25 +38,39 @@ public class BlueFarAuto extends LinearOpMode {
     private static final Pose START_POSE  = new Pose(61.96,  9.27, Math.toRadians(90.0));
     private static final Pose TARGET_POSE = new Pose(60.61, 22.94, Math.toRadians(120.0));
 
-    // NEW: second-shot heading offset (deg). Positive = CCW (aim more left), negative = CW (aim more right).
-    // Tune this on-field; typical tweak is between -5° and +5°.
-    private static final double SECOND_SHOT_HEADING_OFFSET_DEG = -7.0;
-
-    // Build a second-shot pose: SAME XY as TARGET_POSE, but heading nudged by offset
+    // Second-shot heading offset (applies only to the second volley)
+    private static final double SECOND_SHOT_HEADING_OFFSET_DEG = -7.0; // tweak on-field
     private static final Pose TARGET_POSE_2 = new Pose(
             TARGET_POSE.getX(),
             TARGET_POSE.getY(),
             TARGET_POSE.getHeading() + Math.toRadians(SECOND_SHOT_HEADING_OFFSET_DEG)
     );
 
-    // Additional scoring path poses
-    private static final Pose INTAKE_ALIGN_POSE = new Pose(26.06, 22.00, Math.toRadians(90.0));
-    private static final Pose INTAKE_POSE       = new Pose(26.06, 32.82, Math.toRadians(90.0));
-    private static final Pose PARK_POSE         = new Pose(26.06, 46.94, Math.toRadians(90.0));
+    // Third-shot heading offset (applies only to the third volley)
+    // Negative = rotate CW (aim more right); positive = CCW (aim more left).
+    private static final double THIRD_SHOT_HEADING_OFFSET_DEG = -7.0; // tune ±1–2°
+    private static final Pose TARGET_POSE_3 = new Pose(
+            TARGET_POSE.getX(),
+            TARGET_POSE.getY(),
+            TARGET_POSE.getHeading() + Math.toRadians(THIRD_SHOT_HEADING_OFFSET_DEG)
+    );
+
+    // First intake cycle
+    private static final Pose INTAKE_ALIGN_POSE_1 = new Pose(26.06, 22.00, Math.toRadians(90.0));
+    private static final Pose INTAKE_POSE_1       = new Pose(26.06, 32.82, Math.toRadians(90.0));
+
+    // Second intake cycle + final park
+    private static final Pose INTAKE_ALIGN_POSE_2 = new Pose(26.06, 40.00, Math.toRadians(90.0));
+    private static final Pose INTAKE_POSE_2       = new Pose(26.06, 60.00, Math.toRadians(90.0));
+    private static final Pose FINAL_PARK_POSE     = new Pose(30, 65.00, Math.toRadians(90.0));
 
     // === Intake controls ===
     private static final double INTAKE_POWER_IN      = 1.0;
-    private static final double INTAKE_EXTRA_HOLD_S  = 0.60; // after reaching INTAKE_POSE
+    private static final double INTAKE_EXTRA_HOLD_S  = 0.60; // short hold after arriving at intake poses
+
+    // NEW: reverse “burp” to shed extras on the way back to launch
+    private static final double INTAKE_REVERSE_POWER   = -0.6;
+    private static final double INTAKE_REVERSE_PULSE_S = 0.35;
 
     private Limelight3A limelight;
     private LimelightVisionFtc llVision;
@@ -67,10 +81,13 @@ public class BlueFarAuto extends LinearOpMode {
     // Pedro follower / paths
     private Follower follower;
     private PathChain pathToShot;
-    private PathChain pathToAlign;
-    private PathChain pathToIntake;
-    private PathChain pathBackToShot;  // uses TARGET_POSE_2 heading
-    private PathChain pathToPark;
+    private PathChain pathToAlign1;
+    private PathChain pathToIntake1;
+    private PathChain pathBackToShot_2nd;   // back to TARGET_POSE (XY), aim with TARGET_POSE_2 heading
+    private PathChain pathToAlign2;
+    private PathChain pathToIntake2;
+    private PathChain pathBackToShot_3rd;   // back to TARGET_POSE (XY), aim with TARGET_POSE_3 heading
+    private PathChain pathToFinalPark;
 
     // INIT cycling state
     private int activePipeline = PIPE_OBELISK_1;
@@ -89,17 +106,26 @@ public class BlueFarAuto extends LinearOpMode {
     private boolean intakeActive = false;
     private double intakeHoldAfterPathS = 0.0;
 
+    // NEW: reverse pulse state
+    private boolean reversePulseActive = false;
+    private double reversePulseTimerS  = 0.0;
+
     // Run-phase state machine
     private enum Phase {
-        START_AND_DRIVE,          // drive to first shot; pre-advance while driving
-        ARRIVED_SPINUP_WAIT_1,    // spin up @TARGET_POSE
-        FIRE_THREE_1,             // first 3-ball volley
-        DRIVE_ALIGN,              // to INTAKE_ALIGN_POSE
-        INTAKE_MOVE,              // intake ON and drive to INTAKE_POSE (+ extra hold)
-        DRIVE_BACK_TO_SHOT,       // drive back to TARGET_POSE (XY) but aim with TARGET_POSE_2 heading
-        ARRIVED_SPINUP_WAIT_2,    // spin up for second volley
-        FIRE_THREE_2,             // second 3-ball volley
-        DRIVE_PARK,               // drive to PARK_POSE
+        START_AND_DRIVE,
+        ARRIVED_SPINUP_WAIT_1,
+        FIRE_THREE_1,
+        DRIVE_ALIGN_1,
+        INTAKE_MOVE_1,
+        DRIVE_BACK_TO_SHOT_2ND,
+        ARRIVED_SPINUP_WAIT_2,
+        FIRE_THREE_2,
+        DRIVE_ALIGN_2,
+        INTAKE_MOVE_2,
+        DRIVE_BACK_TO_SHOT_3RD,
+        ARRIVED_SPINUP_WAIT_3,
+        FIRE_THREE_3,
+        DRIVE_FINAL_PARK,
         DONE
     }
     private Phase phase = Phase.START_AND_DRIVE;
@@ -128,30 +154,45 @@ public class BlueFarAuto extends LinearOpMode {
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(START_POSE);
 
+        // Paths
         pathToShot = follower.pathBuilder()
                 .addPath(new BezierLine(START_POSE, TARGET_POSE))
                 .setLinearHeadingInterpolation(START_POSE.getHeading(), TARGET_POSE.getHeading())
                 .build();
 
-        pathToAlign = follower.pathBuilder()
-                .addPath(new BezierLine(TARGET_POSE, INTAKE_ALIGN_POSE))
-                .setLinearHeadingInterpolation(TARGET_POSE.getHeading(), INTAKE_ALIGN_POSE.getHeading())
+        pathToAlign1 = follower.pathBuilder()
+                .addPath(new BezierLine(TARGET_POSE, INTAKE_ALIGN_POSE_1))
+                .setLinearHeadingInterpolation(TARGET_POSE.getHeading(), INTAKE_ALIGN_POSE_1.getHeading())
                 .build();
 
-        pathToIntake = follower.pathBuilder()
-                .addPath(new BezierLine(INTAKE_ALIGN_POSE, INTAKE_POSE))
-                .setLinearHeadingInterpolation(INTAKE_ALIGN_POSE.getHeading(), INTAKE_POSE.getHeading())
+        pathToIntake1 = follower.pathBuilder()
+                .addPath(new BezierLine(INTAKE_ALIGN_POSE_1, INTAKE_POSE_1))
+                .setLinearHeadingInterpolation(INTAKE_ALIGN_POSE_1.getHeading(), INTAKE_POSE_1.getHeading())
                 .build();
 
-        // IMPORTANT: we drive back to the same XY (TARGET_POSE) but interpolate heading to TARGET_POSE_2.getHeading()
-        pathBackToShot = follower.pathBuilder()
-                .addPath(new BezierLine(INTAKE_POSE, TARGET_POSE)) // XY identical to first shot
-                .setLinearHeadingInterpolation(INTAKE_POSE.getHeading(), TARGET_POSE_2.getHeading())
+        pathBackToShot_2nd = follower.pathBuilder()
+                .addPath(new BezierLine(INTAKE_POSE_1, TARGET_POSE))
+                .setLinearHeadingInterpolation(INTAKE_POSE_1.getHeading(), TARGET_POSE_2.getHeading())
                 .build();
 
-        pathToPark = follower.pathBuilder()
-                .addPath(new BezierLine(TARGET_POSE, PARK_POSE))
-                .setLinearHeadingInterpolation(TARGET_POSE.getHeading(), PARK_POSE.getHeading())
+        pathToAlign2 = follower.pathBuilder()
+                .addPath(new BezierLine(TARGET_POSE, INTAKE_ALIGN_POSE_2))
+                .setLinearHeadingInterpolation(TARGET_POSE.getHeading(), INTAKE_ALIGN_POSE_2.getHeading())
+                .build();
+
+        pathToIntake2 = follower.pathBuilder()
+                .addPath(new BezierLine(INTAKE_ALIGN_POSE_2, INTAKE_POSE_2))
+                .setLinearHeadingInterpolation(INTAKE_ALIGN_POSE_2.getHeading(), INTAKE_POSE_2.getHeading())
+                .build();
+
+        pathBackToShot_3rd = follower.pathBuilder()
+                .addPath(new BezierLine(INTAKE_POSE_2, TARGET_POSE))
+                .setLinearHeadingInterpolation(INTAKE_POSE_2.getHeading(), TARGET_POSE_3.getHeading())
+                .build();
+
+        pathToFinalPark = follower.pathBuilder()
+                .addPath(new BezierLine(TARGET_POSE, FINAL_PARK_POSE))
+                .setLinearHeadingInterpolation(TARGET_POSE.getHeading(), FINAL_PARK_POSE.getHeading())
                 .build();
 
         telemetry.addLine("INIT: cycling pipelines 2/3/4; showing LIVE AprilTag + last valid.");
@@ -161,12 +202,10 @@ public class BlueFarAuto extends LinearOpMode {
         while (!isStarted() && !isStopRequested()) {
             llVision.poll();
 
-            // Current reading
             curHasTarget = llVision.hasTarget();
             curTid = curHasTarget ? llVision.getTid() : -1;
             curPatternText = mapTidToPatternText(curTid);
 
-            // Record last valid tag for use at Start
             if (curTid == TID_GPP || curTid == TID_PGP || curTid == TID_PPG) {
                 lastSeenTid = curTid;
                 lastSeenPatternText = curPatternText;
@@ -183,38 +222,35 @@ public class BlueFarAuto extends LinearOpMode {
             telemetry.addData("Pose Start", poseStr(START_POSE));
             telemetry.addData("Pose Shot1", poseStr(TARGET_POSE));
             telemetry.addData("Pose Shot2 (offset)", poseStr(TARGET_POSE_2));
-            telemetry.addData("Pose Align", poseStr(INTAKE_ALIGN_POSE));
-            telemetry.addData("Pose Intake", poseStr(INTAKE_POSE));
-            telemetry.addData("Pose Park", poseStr(PARK_POSE));
+            telemetry.addData("Pose Shot3 (offset)", poseStr(TARGET_POSE_3));
+            telemetry.addData("Pose Align1", poseStr(INTAKE_ALIGN_POSE_1));
+            telemetry.addData("Pose Intake1", poseStr(INTAKE_POSE_1));
+            telemetry.addData("Pose Align2", poseStr(INTAKE_ALIGN_POSE_2));
+            telemetry.addData("Pose Intake2", poseStr(INTAKE_POSE_2));
+            telemetry.addData("Pose Final Park", poseStr(FINAL_PARK_POSE));
             telemetry.update();
 
-            // Keep cycling so DS sees the randomization live
             activePipeline = cyclePipeline(activePipeline);
             llVision.setPipeline(activePipeline);
-
             sleep(50);
         }
 
         // ===== RUN (after Start) =====
         long lastNs = System.nanoTime();
 
-        // Choose the tag to use (fallback to PPG if none)
         final int tidToUse =
                 (lastSeenTid == TID_GPP || lastSeenTid == TID_PGP || lastSeenTid == TID_PPG)
                         ? lastSeenTid : TID_PPG;
 
-        // Pre-advance steps based on tag
         final int preAdvanceTotal = computePreAdvanceFromTid(tidToUse);
-        int preAdvanceRemaining = preAdvanceTotal; // non-blocking while we drive
+        int preAdvanceRemaining = preAdvanceTotal;
 
-        // Spin-up timing (after ARRIVAL to shot pose)
         double spinupElapsed = 0.0;
 
-        // Launch trigger guards
         boolean launch1Started = false;
         boolean launch2Started = false;
+        boolean launch3Started = false;
 
-        // Kick off flywheel + Pedro drive at once
         flywheel.setState(Flywheel.State.LONG);
         follower.followPath(pathToShot, true);
 
@@ -224,22 +260,19 @@ public class BlueFarAuto extends LinearOpMode {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
 
-            // Always update mechanisms each loop
             flywheel.update(dt);
             indexer.update(dt);
             follower.update();
+            intakeReverseUpdate(dt); // <<< keep reverse-pulse timing updated
 
             switch (phase) {
                 case START_AND_DRIVE: {
-                    // Pre-advance indexer non-blocking while driving
                     if (preAdvanceRemaining > 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         indexer.advanceOneSlot();
                         preAdvanceRemaining--;
                     }
-
-                    // Wait for arrival at the shot pose
                     if (!follower.isBusy()) {
-                        spinupElapsed = 0.0; // reset spin-up AFTER arrival
+                        spinupElapsed = 0.0;
                         phase = Phase.ARRIVED_SPINUP_WAIT_1;
                     }
                     break;
@@ -247,14 +280,12 @@ public class BlueFarAuto extends LinearOpMode {
 
                 case ARRIVED_SPINUP_WAIT_1: {
                     spinupElapsed += dt;
-
                     double target = flywheel.getTargetRpm();
                     double errR = Math.abs(flywheel.getMeasuredRightRpm() - target);
                     double errL = Math.abs(flywheel.getMeasuredLeftRpm() - target);
                     boolean rpmOk = target > 0 && errR < RPM_TOL && errL < RPM_TOL;
 
-                    if ((spinupElapsed >= SPINUP_MIN_WAIT_S && rpmOk) ||
-                            (spinupElapsed >= SPINUP_TIMEOUT_S)) {
+                    if ((spinupElapsed >= SPINUP_MIN_WAIT_S && rpmOk) || (spinupElapsed >= SPINUP_TIMEOUT_S)) {
                         phase = Phase.FIRE_THREE_1;
                     }
                     break;
@@ -266,37 +297,36 @@ public class BlueFarAuto extends LinearOpMode {
                         launch1Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        follower.followPath(pathToAlign, true);
-                        phase = Phase.DRIVE_ALIGN;
+                        follower.followPath(pathToAlign1, true);
+                        phase = Phase.DRIVE_ALIGN_1;
                     }
                     break;
                 }
 
-                case DRIVE_ALIGN: {
+                case DRIVE_ALIGN_1: {
                     if (!follower.isBusy()) {
-                        // Start intake and move to the intake position
                         intakeStart();
                         intakeHoldAfterPathS = 0.0;
-                        follower.followPath(pathToIntake, true);
-                        phase = Phase.INTAKE_MOVE;
+                        follower.followPath(pathToIntake1, true);
+                        phase = Phase.INTAKE_MOVE_1;
                     }
                     break;
                 }
 
-                case INTAKE_MOVE: {
-                    // Keep intake on while moving; once we arrive, hold a bit longer
+                case INTAKE_MOVE_1: {
                     if (!follower.isBusy()) {
                         intakeHoldAfterPathS += dt;
                         if (intakeHoldAfterPathS >= INTAKE_EXTRA_HOLD_S) {
-                            intakeStop();
-                            follower.followPath(pathBackToShot, true); // returns to TARGET_POSE XY, aims with TARGET_POSE_2 heading
-                            phase = Phase.DRIVE_BACK_TO_SHOT;
+                            intakeStop(); // stop forward intake before reverse pulse
+                            follower.followPath(pathBackToShot_2nd, true);
+                            intakeReversePulseStart(); // <<< BURP while driving to shot 2
+                            phase = Phase.DRIVE_BACK_TO_SHOT_2ND;
                         }
                     }
                     break;
                 }
 
-                case DRIVE_BACK_TO_SHOT: {
+                case DRIVE_BACK_TO_SHOT_2ND: {
                     if (!follower.isBusy()) {
                         spinupElapsed = 0.0;
                         phase = Phase.ARRIVED_SPINUP_WAIT_2;
@@ -306,14 +336,12 @@ public class BlueFarAuto extends LinearOpMode {
 
                 case ARRIVED_SPINUP_WAIT_2: {
                     spinupElapsed += dt;
-
                     double target = flywheel.getTargetRpm();
                     double errR = Math.abs(flywheel.getMeasuredRightRpm() - target);
                     double errL = Math.abs(flywheel.getMeasuredLeftRpm() - target);
                     boolean rpmOk = target > 0 && errR < RPM_TOL && errL < RPM_TOL;
 
-                    if ((spinupElapsed >= SPINUP_MIN_WAIT_S && rpmOk) ||
-                            (spinupElapsed >= SPINUP_TIMEOUT_S)) {
+                    if ((spinupElapsed >= SPINUP_MIN_WAIT_S && rpmOk) || (spinupElapsed >= SPINUP_TIMEOUT_S)) {
                         phase = Phase.FIRE_THREE_2;
                     }
                     break;
@@ -325,13 +353,69 @@ public class BlueFarAuto extends LinearOpMode {
                         launch2Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        follower.followPath(pathToPark, true);
-                        phase = Phase.DRIVE_PARK;
+                        follower.followPath(pathToAlign2, true);
+                        phase = Phase.DRIVE_ALIGN_2;
                     }
                     break;
                 }
 
-                case DRIVE_PARK: {
+                case DRIVE_ALIGN_2: {
+                    if (!follower.isBusy()) {
+                        intakeStart();
+                        intakeHoldAfterPathS = 0.0;
+                        follower.followPath(pathToIntake2, true);
+                        phase = Phase.INTAKE_MOVE_2;
+                    }
+                    break;
+                }
+
+                case INTAKE_MOVE_2: {
+                    if (!follower.isBusy()) {
+                        intakeHoldAfterPathS += dt;
+                        if (intakeHoldAfterPathS >= INTAKE_EXTRA_HOLD_S) {
+                            intakeStop(); // stop forward intake before reverse pulse
+                            follower.followPath(pathBackToShot_3rd, true);
+                            intakeReversePulseStart(); // <<< BURP while driving to shot 3
+                            phase = Phase.DRIVE_BACK_TO_SHOT_3RD;
+                        }
+                    }
+                    break;
+                }
+
+                case DRIVE_BACK_TO_SHOT_3RD: {
+                    if (!follower.isBusy()) {
+                        spinupElapsed = 0.0;
+                        phase = Phase.ARRIVED_SPINUP_WAIT_3;
+                    }
+                    break;
+                }
+
+                case ARRIVED_SPINUP_WAIT_3: {
+                    spinupElapsed += dt;
+                    double target = flywheel.getTargetRpm();
+                    double errR = Math.abs(flywheel.getMeasuredRightRpm() - target);
+                    double errL = Math.abs(flywheel.getMeasuredLeftRpm() - target);
+                    boolean rpmOk = target > 0 && errR < RPM_TOL && errL < RPM_TOL;
+
+                    if ((spinupElapsed >= SPINUP_MIN_WAIT_S && rpmOk) || (spinupElapsed >= SPINUP_TIMEOUT_S)) {
+                        phase = Phase.FIRE_THREE_3;
+                    }
+                    break;
+                }
+
+                case FIRE_THREE_3: {
+                    if (!launch3Started) {
+                        indexer.startAutoLaunchAllThree();
+                        launch3Started = true;
+                    }
+                    if (!indexer.isAutoRunning()) {
+                        follower.followPath(pathToFinalPark, true);
+                        phase = Phase.DRIVE_FINAL_PARK;
+                    }
+                    break;
+                }
+
+                case DRIVE_FINAL_PARK: {
                     if (!follower.isBusy()) {
                         phase = Phase.DONE;
                     }
@@ -355,12 +439,17 @@ public class BlueFarAuto extends LinearOpMode {
             telemetry.addData("Indexer Moving", indexer.isMoving());
             telemetry.addData("Pedro Pose", poseStr(follower.getPose()));
             telemetry.addData("Pedro Busy", follower.isBusy());
-            telemetry.addData("Second Shot Heading Offset", "%.1f°", SECOND_SHOT_HEADING_OFFSET_DEG);
+            telemetry.addData("Second Shot Offset (deg)", "%.1f", SECOND_SHOT_HEADING_OFFSET_DEG);
+            telemetry.addData("Third  Shot Offset (deg)", "%.1f", THIRD_SHOT_HEADING_OFFSET_DEG);
+            telemetry.addData("Intake Active", intakeActive);
+            telemetry.addData("Intake Hold (s)", "%.2f", intakeHoldAfterPathS);
+            telemetry.addData("Reverse Pulse", reversePulseActive);
+            telemetry.addData("Reverse Timer (s)", "%.2f", reversePulseTimerS);
             telemetry.update();
         }
 
         // Safety
-        intakeStop();
+        intakeAllStop();
         indexer.setCamOpen(false);
         flywheel.stop();
     }
@@ -373,6 +462,31 @@ public class BlueFarAuto extends LinearOpMode {
 
     private void intakeStop() {
         intakeActive = false;
+        intakeMotor.setPower(0.0);
+    }
+
+    // Reverse “burp” controls
+    private void intakeReversePulseStart() {
+        reversePulseActive = true;
+        reversePulseTimerS  = 0.0;
+        // ensure forward intake is off
+        intakeActive = false;
+        intakeMotor.setPower(INTAKE_REVERSE_POWER);
+    }
+
+    private void intakeReverseUpdate(double dt) {
+        if (!reversePulseActive) return;
+        reversePulseTimerS += dt;
+        if (reversePulseTimerS >= INTAKE_REVERSE_PULSE_S) {
+            // stop the motor after pulse
+            reversePulseActive = false;
+            intakeMotor.setPower(0.0);
+        }
+    }
+
+    private void intakeAllStop() {
+        intakeActive = false;
+        reversePulseActive = false;
         intakeMotor.setPower(0.0);
     }
 
@@ -393,7 +507,7 @@ public class BlueFarAuto extends LinearOpMode {
 
     /** Map tag to how many forward slots we must advance before firing. */
     private int computePreAdvanceFromTid(int tid) {
-        // Preload order is P,P, G with P at firing position at start.
+        // Preload order is P,P,G with P at firing position at start.
         // Tag 23 = PPG → already correct → advance 0
         // Tag 22 = PGP → advance 1
         // Tag 21 = GPP → advance 2
