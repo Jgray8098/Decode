@@ -33,17 +33,14 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final double RPM_TOL           = 60.0;
 
     // ===== Drive power profiles =====
-    // Normal = full speed for transit / launch
-    // Intake = slower for precision while grabbing balls
     private static final double MAX_POWER_NORMAL = 1.0;
     private static final double MAX_POWER_INTAKE = 0.45;  // tweak (0.4–0.6)
 
     // ===== Intake settle timing =====
-    // Extra time to let balls seat in the indexer before advancing during intake
-    private static final double INTAKE_SETTLE_S = 0.5;   // tweak if still early/late
+    // Extra time to let balls seat in the indexer before advancing / pre-advancing
+    private static final double INTAKE_SETTLE_S = 0.65;   // tweak if still early/late
 
     // ===== Field Poses (inches, radians) =====
-    // Start pose (same as AprilTag start)
     private static final Pose START_POSE = new Pose(20.461, 123.153, Math.toRadians(54));
 
     // AprilTag scan move
@@ -59,8 +56,9 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_P12_POSE      = new Pose(32.043, 86.477, Math.toRadians(180));
     private static final Pose INTAKE_G11_POSE      = new Pose(27.024, 86.477, Math.toRadians(180));
 
-    // Launch pose for first row (same XY as LaunchSecondRow)
-    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(43.046, 100.182, Math.toRadians(134));
+    // Launch pose for first row
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(
+            45.046, 98.182, Math.toRadians(128));   // tune for Row 1
 
     // Row 2 intake line
     private static final Pose ALIGN_INTAKE2_POSE   = new Pose(42.694, 62.928, Math.toRadians(180));
@@ -68,7 +66,9 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_G21_POSE      = new Pose(32.622, 62.928, Math.toRadians(180));
     private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 62.928, Math.toRadians(180));
 
-    private static final Pose LAUNCH_SECOND_ROW_POSE = LAUNCH_FIRST_ROW_POSE;
+    // Launch pose for second row (independent from first row)
+    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(
+            43.046, 100.182, Math.toRadians(134));   // start same as Row 1, then tune separately
 
     // Final park
     private static final Pose PARK_POSE = new Pose(28.568, 75.475, Math.toRadians(90));
@@ -127,23 +127,25 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
         DRIVE_ALIGN_INTAKE1,       // AlignIntake1
         DRIVE_INTAKE_PURPLE11,     // IntakePurple11
-        WAIT_INDEXER_AFTER_P11,    // advance one slot after P11 (with settle delay)
+        WAIT_INDEXER_AFTER_P11,    // settle + advance
         DRIVE_INTAKE_PURPLE12,     // IntakePurple12
-        WAIT_INDEXER_AFTER_P12,    // advance one slot after P12 (with settle delay)
-        DRIVE_INTAKE_GREEN11,      // IntakeGreen11
+        WAIT_INDEXER_AFTER_P12,    // settle + advance
+        DRIVE_INTAKE_GREEN11,      // IntakeGreen11 (third ball row 1)
+        WAIT_SETTLE_AFTER_G11,     // settle only, then pre-advance Row1
 
-        DRIVE_LAUNCH_FIRST_ROW,    // LaunchFirstRow; pre-advance same as preloads
+        DRIVE_LAUNCH_FIRST_ROW,    // LaunchFirstRow
         ARRIVED_SPINUP_FIRST_ROW,  // spinup gate
         FIRE_THREE_FIRST_ROW,      // second 3-ball volley
 
         DRIVE_ALIGN_INTAKE2,       // AlignIntake2
         DRIVE_INTAKE_PURPLE21,     // IntakePurple21
-        WAIT_INDEXER_AFTER_P21,    // advance one slot after P21 (with settle delay)
+        WAIT_INDEXER_AFTER_P21,    // settle + advance
         DRIVE_INTAKE_GREEN21,      // IntakeGreen21
-        WAIT_INDEXER_AFTER_G21,    // advance one slot after G21 (with settle delay)
-        DRIVE_INTAKE_PURPLE22,     // IntakePurple22
+        WAIT_INDEXER_AFTER_G21,    // settle + advance
+        DRIVE_INTAKE_PURPLE22,     // IntakePurple22 (third ball row 2)
+        WAIT_SETTLE_AFTER_P22,     // settle only, then pre-advance Row2
 
-        DRIVE_LAUNCH_SECOND_ROW,   // LaunchSecondRow; special pre-advance
+        DRIVE_LAUNCH_SECOND_ROW,   // LaunchSecondRow
         ARRIVED_SPINUP_SECOND_ROW, // spinup gate
         FIRE_THREE_SECOND_ROW,     // third 3-ball volley
 
@@ -206,7 +208,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         // ===== RUN =====
         long lastNs = System.nanoTime();
 
-        // Start CLOSE flywheel and first path
         flywheel.setState(Flywheel.State.CLOSE);
         follower.followPath(paths.AprilTagPosition, true);
         phase = Phase.DRIVE_APRILTAG_POSITION;
@@ -215,7 +216,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
 
-            // Update subsystems
             llVision.poll();
             flywheel.update(dt);
             indexer.update(dt);
@@ -225,7 +225,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                 // --- Drive to Tag viewing pose ---
                 case DRIVE_APRILTAG_POSITION: {
                     if (!follower.isBusy()) {
-                        // Start tag detection
                         activePipeline = PIPE_OBELISK_1;
                         llVision.setPipeline(activePipeline);
                         lastPipeSwapNs = System.nanoTime();
@@ -250,11 +249,10 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             detectedTid = tid;
                             tidToUse = tid;
 
-                            // Preloads: PPG -> 0, PGP -> 1, GPP -> 2
+                            // Preloads: (original mapping)
                             preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
                             preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
-                            // Normal speed while going to preload launch
                             setDrivePowerNormal();
                             follower.followPath(paths.LaunchPreloads, true);
                             phase = Phase.DRIVE_LAUNCH_PRELOADS;
@@ -263,9 +261,10 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     break;
                 }
 
-                // --- Launch preloads with pattern-based pre-advance ---
+                // --- Launch preloads ---
                 case DRIVE_LAUNCH_PRELOADS: {
-                    if (preAdvanceRemainingPreloads > 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
+                    if (preAdvanceRemainingPreloads > 0
+                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         indexer.advanceOneSlot();
                         preAdvanceRemainingPreloads--;
                     }
@@ -294,19 +293,17 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         launchPreloadsStarted = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // Align path is NORMAL speed
-                        setDrivePowerNormal();
+                        setDrivePowerNormal(); // align at full speed
                         follower.followPath(paths.AlignIntake1, true);
                         phase = Phase.DRIVE_ALIGN_INTAKE1;
                     }
                     break;
                 }
 
-                // --- Intake Row 1: P11 -> advance -> P12 -> advance -> G11 ---
+                // --- Intake Row 1 ---
                 case DRIVE_ALIGN_INTAKE1: {
                     if (!follower.isBusy()) {
-                        // Now slow down for actual intake passes
-                        setDrivePowerIntake();
+                        setDrivePowerIntake();  // slow for actual intake
                         intakeStart();
                         follower.followPath(paths.IntakePurple11, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE11;
@@ -316,7 +313,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_INTAKE_PURPLE11: {
                     if (!follower.isBusy()) {
-                        // We’ve arrived at P11; start settle timer before indexing
                         intakeSettleTimerS = 0.0;
                         settleAdvanceIssued = false;
                         phase = Phase.WAIT_INDEXER_AFTER_P11;
@@ -327,7 +323,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                 case WAIT_INDEXER_AFTER_P11: {
                     intakeSettleTimerS += dt;
 
-                    // After settle time, request an advance once
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
@@ -336,7 +331,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         settleAdvanceIssued = true;
                     }
 
-                    // Once advance is complete, move to P12
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
                             && !indexer.isMoving()) {
@@ -348,7 +342,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_INTAKE_PURPLE12: {
                     if (!follower.isBusy()) {
-                        // Arrived at P12; start settle timer before indexing
                         intakeSettleTimerS = 0.0;
                         settleAdvanceIssued = false;
                         phase = Phase.WAIT_INDEXER_AFTER_P12;
@@ -370,7 +363,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
                             && !indexer.isMoving()) {
-                        // now drive to G11
                         follower.followPath(paths.IntakeGreen11, true);
                         phase = Phase.DRIVE_INTAKE_GREEN11;
                     }
@@ -379,14 +371,24 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_INTAKE_GREEN11: {
                     if (!follower.isBusy()) {
-                        // Done intaking row 1; stop intake, go to first-row launch
+                        // Third ball of row 1: just settle, no indexer move
+                        intakeSettleTimerS = 0.0;
+                        phase = Phase.WAIT_SETTLE_AFTER_G11;
+                    }
+                    break;
+                }
+
+                case WAIT_SETTLE_AFTER_G11: {
+                    intakeSettleTimerS += dt;
+
+                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
+                        // Now safe to stop intake and start Row1 pre-advance logic
                         intakeStop();
 
-                        // Row1: same pre-advance logic as preloads
-                        preAdvanceTotalRow1     = computePreAdvancePreloads(tidToUse);
+                        // Row1: NEW mapping
+                        preAdvanceTotalRow1     = computePreAdvanceRow1(tidToUse);
                         preAdvanceRemainingRow1 = preAdvanceTotalRow1;
 
-                        // Back to normal speed for launch
                         setDrivePowerNormal();
                         follower.followPath(paths.LaunchFirstRow, true);
                         phase = Phase.DRIVE_LAUNCH_FIRST_ROW;
@@ -396,7 +398,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 1 ---
                 case DRIVE_LAUNCH_FIRST_ROW: {
-                    if (preAdvanceRemainingRow1 > 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
+                    if (preAdvanceRemainingRow1 > 0
+                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         indexer.advanceOneSlot();
                         preAdvanceRemainingRow1--;
                     }
@@ -425,18 +428,16 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         launchRow1Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // Align for row 2 at NORMAL speed
-                        setDrivePowerNormal();
+                        setDrivePowerNormal(); // align 2nd row at full speed
                         follower.followPath(paths.AlignIntake2, true);
                         phase = Phase.DRIVE_ALIGN_INTAKE2;
                     }
                     break;
                 }
 
-                // --- Intake Row 2: P21 -> advance -> G21 -> advance -> P22 ---
+                // --- Intake Row 2 ---
                 case DRIVE_ALIGN_INTAKE2: {
                     if (!follower.isBusy()) {
-                        // Now slow down for actual intake passes
                         setDrivePowerIntake();
                         intakeStart();
                         follower.followPath(paths.IntakePurple21, true);
@@ -447,7 +448,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_INTAKE_PURPLE21: {
                     if (!follower.isBusy()) {
-                        // Arrived at P21: start settle before indexer
                         intakeSettleTimerS = 0.0;
                         settleAdvanceIssued = false;
                         phase = Phase.WAIT_INDEXER_AFTER_P21;
@@ -477,7 +477,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_INTAKE_GREEN21: {
                     if (!follower.isBusy()) {
-                        // Arrived at G21: start settle before indexer
                         intakeSettleTimerS = 0.0;
                         settleAdvanceIssued = false;
                         phase = Phase.WAIT_INDEXER_AFTER_G21;
@@ -507,14 +506,23 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_INTAKE_PURPLE22: {
                     if (!follower.isBusy()) {
-                        // done intaking row 2, stop intake, go to launch second row
+                        // Third ball of row 2: just settle, then pre-advance Row2
+                        intakeSettleTimerS = 0.0;
+                        phase = Phase.WAIT_SETTLE_AFTER_P22;
+                    }
+                    break;
+                }
+
+                case WAIT_SETTLE_AFTER_P22: {
+                    intakeSettleTimerS += dt;
+
+                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
                         intakeStop();
 
                         // Row2: NEW mapping
                         preAdvanceTotalRow2     = computePreAdvanceRow2(tidToUse);
                         preAdvanceRemainingRow2 = preAdvanceTotalRow2;
 
-                        // Back to normal speed for launch
                         setDrivePowerNormal();
                         follower.followPath(paths.LaunchSecondRow, true);
                         phase = Phase.DRIVE_LAUNCH_SECOND_ROW;
@@ -524,7 +532,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 2 ---
                 case DRIVE_LAUNCH_SECOND_ROW: {
-                    if (preAdvanceRemainingRow2 > 0 && !indexer.isMoving() && !indexer.isAutoRunning()) {
+                    if (preAdvanceRemainingRow2 > 0
+                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
                         indexer.advanceOneSlot();
                         preAdvanceRemainingRow2--;
                     }
@@ -553,7 +562,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         launchRow2Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // Park can be full speed
                         setDrivePowerNormal();
                         follower.followPath(paths.Park, true);
                         phase = Phase.DRIVE_PARK;
@@ -561,7 +569,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     break;
                 }
 
-                // --- Final Park ---
                 case DRIVE_PARK: {
                     if (!follower.isBusy()) {
                         phase = Phase.DONE;
@@ -574,7 +581,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     break;
             }
 
-            // Telemetry
             telemetry.addData("Phase", phase);
             telemetry.addData("ActivePipe", activePipeline);
             telemetry.addData("HasTarget", llVision.hasTarget());
@@ -629,7 +635,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         intakeMotor.setPower(0.0);
     }
 
-    // Preloads & Row1 mapping: PPG → 0, PGP → 1, GPP → 2
+    // Preloads mapping (unchanged): PPG → 0, PGP → 1, GPP → 2
     private int computePreAdvancePreloads(int tid) {
         if (tid == TID_PPG) return 0;
         if (tid == TID_PGP) return 1;
@@ -637,11 +643,19 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         return 0;
     }
 
-    // Row2 mapping: PPG → 2, PGP → 0, GPP → 1
-    private int computePreAdvanceRow2(int tid) {
+    // Row1 mapping (NEW): PPG → 2, PGP → 0, GPP → 1
+    private int computePreAdvanceRow1(int tid) {
         if (tid == TID_PPG) return 2;
         if (tid == TID_PGP) return 0;
         if (tid == TID_GPP) return 1;
+        return 0;
+    }
+
+    // Row2 mapping (NEW): PPG → 1, PGP → 2, GPP → 0
+    private int computePreAdvanceRow2(int tid) {
+        if (tid == TID_PPG) return 1;
+        if (tid == TID_PGP) return 2;
+        if (tid == TID_GPP) return 0;
         return 0;
     }
 
@@ -650,7 +664,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                 p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
     }
 
-    /** Smallest signed angle error between two headings (degrees). */
     @SuppressWarnings("unused")
     private static double angleErrorDeg(double currentDeg, double targetDeg) {
         double err = (targetDeg - currentDeg + 540.0) % 360.0 - 180.0;
