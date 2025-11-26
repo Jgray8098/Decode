@@ -15,7 +15,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "RedCloseAuto", group = "Comp")
+//@Autonomous(name = "RedCloseAuto", group = "Comp")
 public class RedCloseAuto extends LinearOpMode {
 
     // ===== Limelight pipelines & TIDs (same as blue) =====

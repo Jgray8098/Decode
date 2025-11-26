@@ -16,7 +16,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "RedFarAuto", group = "Comp")
+//@Autonomous(name = "RedFarAuto", group = "Comp")
 public class RedFarAuto extends LinearOpMode {
 
     // === Limelight pipelines ===

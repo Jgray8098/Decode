@@ -11,7 +11,7 @@ import org.firstinspires.ftc.teamcode.control.HeadingLockController;
 import org.firstinspires.ftc.teamcode.vision.LimelightVisionFtc;
 import org.firstinspires.ftc.teamcode.mechanism.Indexer;
 
-@TeleOp(name = "SlowTeleOp")
+//@TeleOp(name = "SlowTeleOp")
 public class SlowTeleOp extends OpMode {
     MecanumDriveSlow drive = new MecanumDriveSlow();
 
