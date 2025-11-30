@@ -41,6 +41,7 @@ public class MecanumDriveModeNew extends OpMode {
 
     private DcMotor intakeMotor;
 
+    // Indexer (using built-in RUN_TO_POSITION, but with 0.8 power in TeleOp)
     private Indexer indexer;
     private boolean prevLB2 = false; // manual advance
     private boolean prevRB2 = false; // manual cam
@@ -72,18 +73,31 @@ public class MecanumDriveModeNew extends OpMode {
         intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
 
-        indexer = new Indexer("Indexer", "camServo");
+        // Indexer for TeleOp:
+        //  - same mechanism as Auto
+        //  - use 0.8 power here (a bit safer than 1.0)
+        //  - no encoder reset so Auto's hardZero() carries through
+        indexer = new Indexer(
+                "Indexer",
+                "camServo",
+                1425,   // ticksPerRev
+                3,      // slots
+                0.7,    // TeleOp power
+                0.65,   // cam closed
+                0.0     // cam open
+        );
         indexer.setHomeCamOnInit(false);   // do NOT move the servo during TeleOp INIT
         indexer.init(hardwareMap);
+        indexer.setStepDelay(0.15);   // fast TeleOp cycle; adjust if needed
 
         flywheel = new Flywheel("flywheelRight", "flywheelLeft");
         flywheel.init(hardwareMap);
 
         telemetry.addLine("[G1] LB=Hold Align, RB=Toggle Goal (BLUE↔RED)");
         telemetry.addLine("[G1] DPad L/R = change pipeline for SELECTED goal (wrap 0..9)");
-        telemetry.addLine("Indexer: GP2 LB = advance one slot.");
+        telemetry.addLine("Indexer: GP2 LB = advance one slot (requires flywheel running).");
         telemetry.addLine("Cam:     GP2 RB = toggle cam.");
-        telemetry.addLine("Auto:    GP2 B  = auto launch 3 balls.");
+        telemetry.addLine("Auto:    GP2 B  = auto launch 3 balls (requires flywheel running).");
         telemetry.addLine("Intake:  GP2 Y = FORWARD while held, GP2 A = REVERSE while held.");
         telemetry.addLine("Flywheel (GP2): Dpad Up = CLOSE (toggle), Dpad Down = LONG (toggle).");
     }
@@ -135,6 +149,9 @@ public class MecanumDriveModeNew extends OpMode {
         prevDown2 = down2;
         flywheel.update(dt);
 
+        // Is launcher "running" (has a nonzero target)?
+        boolean flywheelActive = flywheel.getTargetRpm() > 0.0;
+
         // ---------- INTAKE ----------
         double intakePower = 0.0;
         if (gamepad2.y)      intakePower = 1.0;
@@ -143,16 +160,30 @@ public class MecanumDriveModeNew extends OpMode {
 
         // ---------- INDEXER ----------
         boolean b2 = gamepad2.b;
-        if (b2 && !prevB2) indexer.startAutoLaunchAllThree();
+        // Auto 3-ball launch ONLY if flywheel is running and indexer is free
+        if (b2 && !prevB2
+                && flywheelActive
+                && !indexer.isAutoRunning()
+                && !indexer.isMoving()) {
+            // If you implemented the continuous fast mode:
+            // indexer.startAutoLaunchAllThreeContinuous();
+            // If you're still on stepped mode, use:
+            indexer.startAutoLaunchAllThreeContinuous();
+        }
         prevB2 = b2;
 
         boolean lb2 = gamepad2.left_bumper;
-        if (lb2 && !prevLB2 && !indexer.isAutoRunning() && !indexer.isMoving()) {
+        // Manual advance ONLY if flywheel is running
+        if (lb2 && !prevLB2
+                && flywheelActive
+                && !indexer.isAutoRunning()
+                && !indexer.isMoving()) {
             indexer.advanceOneSlot();
         }
         prevLB2 = lb2;
 
         boolean rb2 = gamepad2.right_bumper;
+        // Cam can still be toggled anytime (doesn't advance slots by itself)
         if (rb2 && !prevRB2 && !indexer.isAutoRunning()) {
             indexer.setCamOpen(!indexer.isCamOpen());
         }
@@ -167,6 +198,8 @@ public class MecanumDriveModeNew extends OpMode {
         telemetry.addData("Indexer moving", indexer.isMoving());
         telemetry.addData("Cam open", indexer.isCamOpen());
         telemetry.addData("Auto launching", indexer.isAutoRunning());
+        telemetry.addData("Flywheel Target RPM", "%.0f", flywheel.getTargetRpm());
+        telemetry.addData("Indexer allowed to advance", flywheelActive);
         telemetry.update();
     }
 
@@ -243,3 +276,6 @@ public class MecanumDriveModeNew extends OpMode {
         }
     }
 }
+
+
+

@@ -8,7 +8,8 @@ import com.qualcomm.robotcore.hardware.Servo;
 /**
  * Simplified Indexer:
  *  - advanceOneSlot() for manual use
- *  - autoLaunchAllThree(): open cam, advance twice, close cam, done
+ *  - autoLaunchAllThree(): open cam, advance twice, close cam, done (stepped)
+ *  - autoLaunchAllThreeContinuous(): open cam, move 2 slots in one motion, close cam (TeleOp only)
  */
 public class Indexer {
     private DcMotorEx indexer;
@@ -32,8 +33,14 @@ public class Indexer {
     private int autoStep = 0;
     private double timerS = 0.0;
 
+    // --- auto mode flags ---
+    // false  -> original stepped 3-shot sequence (Auto)
+    // true   -> continuous 2-slot move (TeleOp fast mode)
+    private boolean continuousAuto = false;
+
     // timing (seconds)
-    private static final double STEP_DELAY = 0.15;
+    // Instance-level so TeleOp can shorten it without affecting Auto.
+    private double stepDelayS = 0.15;
     private static final int POSITION_TOL = 10;
 
     public Indexer(String indexerMotorName, String camServoName) {
@@ -56,6 +63,12 @@ public class Indexer {
         this.homeCamOnInit = enable;
     }
 
+    /** Allow TeleOp to use a smaller delay between advances without changing Auto behavior. */
+    public void setStepDelay(double seconds) {
+        // clamp to something reasonable so no one accidentally sets 0
+        this.stepDelayS = Math.max(0.05, seconds);
+    }
+
     public void init(HardwareMap hw) {
         indexer = hw.get(DcMotorEx.class, indexerMotorName);
         camServo = hw.get(Servo.class, camServoName);
@@ -68,16 +81,20 @@ public class Indexer {
         targetPosition = indexer.getTargetPosition();
         moving = false;
         camOpen = false;
-        // Only move servo during init if allowed
+        autoRunning = false;
+        continuousAuto = false;
+        autoStep = 0;
+        timerS = 0.0;
+
         if (homeCamOnInit) {
             camServo.setPosition(camInitPos);
         }
     }
 
-    public void hardZero() {                                                    // <<<
-        indexer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);                // <<<
-        targetPosition = 0;                                                     // <<<
-        indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);                     // <<<
+    public void hardZero() {
+        indexer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        targetPosition = 0;
+        indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
     }
 
     /** Manual single advance. */
@@ -87,31 +104,67 @@ public class Indexer {
         runToTarget();
     }
 
-    /** Begin automatic 3-ball launch (open cam + 2 advances). */
+    /**
+     * ORIGINAL stepped 3-ball launch (Auto uses this):
+     *  - cam open
+     *  - wait, advance 1 slot
+     *  - wait, advance 1 slot
+     *  - wait, cam close
+     */
     public void startAutoLaunchAllThree() {
         if (autoRunning || moving) return;
         autoRunning = true;
+        continuousAuto = false;   // use stepped mode
         autoStep = 0;
         timerS = 0;
         setCamOpen(true); // launch first ball
     }
 
+    /**
+     * NEW continuous 3-ball launch for TeleOp:
+     *  - cam open
+     *  - single move of 2 slots
+     *  - small delay, cam close
+     */
+    public void startAutoLaunchAllThreeContinuous() {
+        if (autoRunning || moving) return;
+        autoRunning = true;
+        continuousAuto = true;    // use continuous mode
+        autoStep = 0;
+        timerS = 0;
+        setCamOpen(true);         // fire first ball
+
+        // Plan a single continuous move of 2 slots (slot 1 -> slot 3).
+        targetPosition += 2 * ticksPerSlot;
+        runToTarget();
+    }
+
     public void update(double dt) {
-        // Manage motion end
+        // Manage motion end (for both manual + auto)
         if (moving && !indexer.isBusy()) {
             indexer.setPower(0.0);
             indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             moving = false;
         }
 
-        // Handle auto sequence
-        if (autoRunning) {
-            timerS += dt;
+        if (!autoRunning) return;
 
+        timerS += dt;
+
+        if (continuousAuto) {
+            // === CONTINUOUS TELEOP MODE ===
+            // Wait until we're done moving 2 slots, then a tiny delay, then close cam.
+            if (!moving && timerS > stepDelayS) {
+                setCamOpen(false);
+                autoRunning = false;
+                continuousAuto = false;
+            }
+        } else {
+            // === ORIGINAL STEPPED AUTO MODE ===
             switch (autoStep) {
                 case 0:
                     // wait a short delay before first advance
-                    if (timerS > STEP_DELAY) {
+                    if (timerS > stepDelayS) {
                         timerS = 0;
                         autoStep = 1;
                         targetPosition += ticksPerSlot;
@@ -121,7 +174,7 @@ public class Indexer {
 
                 case 1:
                     // wait for first move to finish, then short delay
-                    if (!moving && timerS > STEP_DELAY) {
+                    if (!moving && timerS > stepDelayS) {
                         timerS = 0;
                         autoStep = 2;
                         targetPosition += ticksPerSlot;
@@ -131,7 +184,7 @@ public class Indexer {
 
                 case 2:
                     // after second move and delay, close cam and finish
-                    if (!moving && timerS > STEP_DELAY) {
+                    if (!moving && timerS > stepDelayS) {
                         setCamOpen(false);
                         autoRunning = false;
                     }
@@ -150,6 +203,7 @@ public class Indexer {
     // --- Helpers ---
     public boolean isMoving() { return moving; }
     public boolean isAutoRunning() { return autoRunning; }
+
     public void homeCam() {
         setCamOpen(false); // this will send servo to camInitPos
     }
@@ -161,3 +215,4 @@ public class Indexer {
 
     public boolean isCamOpen() { return camOpen; }
 }
+
