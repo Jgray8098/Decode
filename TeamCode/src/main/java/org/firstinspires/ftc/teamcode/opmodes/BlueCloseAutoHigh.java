@@ -51,20 +51,20 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(43.239, 99.989, Math.toRadians(145));
 
     // Row 1 intake line
-    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(44.432, 86.477, Math.toRadians(180));
-    private static final Pose INTAKE_P11_POSE      = new Pose(37.834, 86.477, Math.toRadians(180));
-    private static final Pose INTAKE_P12_POSE      = new Pose(32.043, 86.477, Math.toRadians(180));
-    private static final Pose INTAKE_G11_POSE      = new Pose(27.024, 86.477, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(44.432, 85.477, Math.toRadians(180));
+    private static final Pose INTAKE_P11_POSE      = new Pose(37.834, 85.477, Math.toRadians(180));
+    private static final Pose INTAKE_P12_POSE      = new Pose(32.043, 85.477, Math.toRadians(180));
+    private static final Pose INTAKE_G11_POSE      = new Pose(27.024, 85.477, Math.toRadians(180));
 
     // Launch pose for first row
     private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(
             45.046, 98.182, Math.toRadians(128));   // tune for Row 1
 
     // Row 2 intake line
-    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(42.694, 62.928, Math.toRadians(180));
-    private static final Pose INTAKE_P21_POSE      = new Pose(38.027, 62.928, Math.toRadians(180));
-    private static final Pose INTAKE_G21_POSE      = new Pose(32.622, 62.928, Math.toRadians(180));
-    private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 62.928, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(42.694, 61.928, Math.toRadians(180));
+    private static final Pose INTAKE_P21_POSE      = new Pose(38.027, 61.928, Math.toRadians(180));
+    private static final Pose INTAKE_G21_POSE      = new Pose(32.622, 61.928, Math.toRadians(180));
+    private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 61.928, Math.toRadians(180));
 
     // Launch pose for second row (independent from first row)
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(
