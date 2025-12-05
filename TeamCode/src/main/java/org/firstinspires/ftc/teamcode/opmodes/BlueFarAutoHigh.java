@@ -27,6 +27,9 @@ public class BlueFarAutoHigh extends LinearOpMode {
     private static final int TID_PGP = 22;
     private static final int TID_PPG = 23;
 
+    // Swap period for cycling pipelines during INIT scanning
+    private static final long PIPE_SWAP_PERIOD_MS = 50;
+
     // ===== Flywheel (FAR/LONG) gates =====
     private static final double SPINUP_MIN_WAIT_S = 0.60;
     private static final double SPINUP_TIMEOUT_S  = 2.00;
@@ -39,20 +42,16 @@ public class BlueFarAutoHigh extends LinearOpMode {
     // ===== Intake settle timing =====
     private static final double INTAKE_SETTLE_S = 0.65;
 
-    // ===== Field Poses (inches, radians) – BLUE FAR (mirrored from your RedFarAutoHigh) =====
-    // Mirror across X = 72 on a 144" field:
-    //   x' = 144 - x
-    //   heading' = 180° - heading
-
-    // Start pose (mirrored)
+    // ===== Field Poses (inches, radians) – BLUE FAR =====
+    // Start pose
     private static final Pose START_POSE = new Pose(
             61.58, 9.65, Math.toRadians(90.0));
 
-    // Launch preloads pose (mirrored)
+    // Launch preloads pose
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(
             59.07, 20.06, Math.toRadians(118.0));
 
-    // Row 1 intake line (mirrored)
+    // Row 1 intake line
     private static final Pose ALIGN_INTAKE1_POSE = new Pose(
             48.50, 34.517, Math.toRadians(180.0));
     private static final Pose INTAKE_P11_POSE = new Pose(
@@ -62,11 +61,11 @@ public class BlueFarAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_G11_POSE = new Pose(
             27.793, 34.517, Math.toRadians(180.0));
 
-    // Launch pose for first row (mirrored)
+    // Launch pose for first row
     private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(
             53.07, 21.06, Math.toRadians(106.0));   // tune on-field if needed
 
-    // Row 2 intake line (mirrored)
+    // Row 2 intake line
     private static final Pose ALIGN_INTAKE2_POSE = new Pose(
             50.50, 58.465, Math.toRadians(180.0));
     private static final Pose INTAKE_P21_POSE = new Pose(
@@ -76,11 +75,11 @@ public class BlueFarAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_P22_POSE = new Pose(
             27.137, 58.465, Math.toRadians(180.0));
 
-    // Launch pose for second row (mirrored)
+    // Launch pose for second row
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(
             54.07, 21.06, Math.toRadians(105.0));  // tune separately if needed
 
-    // Final park (mirrored)
+    // Final park
     private static final Pose PARK_POSE = new Pose(
             38.079, 14.444, Math.toRadians(90.0));
 
@@ -97,7 +96,7 @@ public class BlueFarAutoHigh extends LinearOpMode {
 
     // Tag detection
     private int activePipeline = PIPE_OBELISK_1;
-    private int detectedTid = -1;
+    private int detectedTid = -1;   // last valid tid seen
     private long lastPipeSwapNs = 0L;
 
     // Pre-advance sets (three separate launch events)
@@ -120,8 +119,9 @@ public class BlueFarAutoHigh extends LinearOpMode {
     // Spin-up timing
     private double spinupElapsedS = 0.0;
 
-    // Which tag pattern we ended up using
+    // Which tag pattern we ended up using (frozen at START)
     private int tidToUse = -1;
+    private boolean usedFallbackPPG = false;
 
     // Launch trigger guards
     private boolean launchPreloadsStarted = false;
@@ -160,6 +160,7 @@ public class BlueFarAutoHigh extends LinearOpMode {
         DRIVE_PARK,
         DONE
     }
+
     private Phase phase = Phase.DRIVE_LAUNCH_PRELOADS;
 
     @Override
@@ -186,9 +187,10 @@ public class BlueFarAutoHigh extends LinearOpMode {
         follower.setStartingPose(START_POSE);
         paths = new Paths(follower);
 
+        // Start with normal drive power
         setDrivePowerNormal();
 
-        telemetry.addLine("BlueFarAutoHigh: Init – detecting AprilTag while idle.");
+        telemetry.addLine("BlueFarAutoHigh: INIT – scanning AprilTag until START (last seen wins)");
         telemetry.addData("Pose Start", poseStr(START_POSE));
         telemetry.addData("Pose Launch Preloads", poseStr(LAUNCH_PRELOADS_POSE));
         telemetry.addData("Pose Align Intake 1", poseStr(ALIGN_INTAKE1_POSE));
@@ -204,20 +206,21 @@ public class BlueFarAutoHigh extends LinearOpMode {
         telemetry.addData("Pose Park", poseStr(PARK_POSE));
         telemetry.update();
 
-        // ===== INIT loop: detect tag while robot is stationary =====
+        // ===== INIT loop: scan until START, remember last valid tid =====
         lastPipeSwapNs = System.nanoTime();
         while (!isStarted() && !isStopRequested()) {
             llVision.poll();
 
-            long now = System.nanoTime();
-            if ((now - lastPipeSwapNs) / 1e6 > 50) {
+            long nowNs = System.nanoTime();
+            if ((nowNs - lastPipeSwapNs) / 1e6 > PIPE_SWAP_PERIOD_MS) {
                 activePipeline = (activePipeline == PIPE_OBELISK_1)
                         ? PIPE_OBELISK_2
                         : (activePipeline == PIPE_OBELISK_2 ? PIPE_OBELISK_3 : PIPE_OBELISK_1);
                 llVision.setPipeline(activePipeline);
-                lastPipeSwapNs = now;
+                lastPipeSwapNs = nowNs;
             }
 
+            // "Last seen wins"
             if (llVision.hasTarget()) {
                 int tid = llVision.getTid();
                 if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
@@ -226,13 +229,15 @@ public class BlueFarAutoHigh extends LinearOpMode {
                 }
             }
 
-            telemetry.addLine("BlueFarAutoHigh: INIT – scanning AprilTag");
+            telemetry.addLine("INIT – scanning AprilTag until START (last seen wins)");
             telemetry.addData("ActivePipe", activePipeline);
             telemetry.addData("HasTarget", llVision.hasTarget());
-            telemetry.addData("TID", llVision.getTid());
-            telemetry.addData("Detected TID", detectedTid);
+            telemetry.addData("Cam TID", llVision.getTid());
+            telemetry.addData("Last Seen Valid TID", detectedTid);
+            telemetry.addData("TID To Use (if started now)", tidToUse);
             telemetry.update();
-            sleep(30);
+
+            sleep(20);
         }
 
         // ===== RUN =====
@@ -240,16 +245,22 @@ public class BlueFarAutoHigh extends LinearOpMode {
 
         long lastNs = System.nanoTime();
 
+        // Freeze decision now: if never saw a valid tid during INIT -> default PPG
         if (tidToUse != TID_GPP && tidToUse != TID_PGP && tidToUse != TID_PPG) {
-            tidToUse = TID_PPG; // safe default
+            tidToUse = TID_PPG;
+            usedFallbackPPG = true;
+        } else {
+            usedFallbackPPG = false;
         }
 
+        // Compute pre-advance for preloads based on tidToUse
         preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
         preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
         // FAR program -> LONG speed
         flywheel.setState(Flywheel.State.LONG);
 
+        // Go directly to launch preloads pose
         setDrivePowerNormal();
         follower.followPath(paths.LaunchPreloads, true);
         phase = Phase.DRIVE_LAUNCH_PRELOADS;
@@ -581,10 +592,9 @@ public class BlueFarAutoHigh extends LinearOpMode {
 
             telemetry.addData("Phase", phase);
             telemetry.addData("ActivePipe", activePipeline);
-            telemetry.addData("HasTarget", llVision.hasTarget());
-            telemetry.addData("TID", llVision.getTid());
-            telemetry.addData("Detected TID", detectedTid);
+            telemetry.addData("Detected TID (INIT)", detectedTid);
             telemetry.addData("Using TID", tidToUse);
+            telemetry.addData("Fallback PPG?", usedFallbackPPG);
             telemetry.addData("Preloads pre-adv rem", preAdvanceRemainingPreloads);
             telemetry.addData("Row1 pre-adv rem", preAdvanceRemainingRow1);
             telemetry.addData("Row2 pre-adv rem", preAdvanceRemainingRow2);
@@ -636,7 +646,7 @@ public class BlueFarAutoHigh extends LinearOpMode {
         return 0;
     }
 
-    // Keep EXACTLY the same mapping you’re using for your RedFarAutoHigh
+    // Keep EXACTLY the same mapping you’re using for your BlueFarAutoHigh / RedFarAutoHigh
     private int computePreAdvanceRow1(int tid) {
         if (tid == TID_PPG) return 1;
         if (tid == TID_PGP) return 2;

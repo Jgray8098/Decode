@@ -39,7 +39,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     // ===== Intake settle timing =====
     private static final double INTAKE_SETTLE_S = 0.65;
 
-    // ✅ NEW: Tag detect timeout so we never get stuck
+    // Tag detect timeout so we never get stuck
     private static final double TAG_DETECT_TIMEOUT_S = 1.25; // tweak 0.8–1.5
 
     // ===== Field Poses (inches, radians) =====
@@ -63,7 +63,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
             45.046, 98.182, Math.toRadians(128));
 
     // Row 2 intake line
-    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(42.694, 61.928, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(46.694, 61.928, Math.toRadians(180));
     private static final Pose INTAKE_P21_POSE      = new Pose(38.027, 61.928, Math.toRadians(180));
     private static final Pose INTAKE_G21_POSE      = new Pose(32.622, 61.928, Math.toRadians(180));
     private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 61.928, Math.toRadians(180));
@@ -90,7 +90,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private int activePipeline = PIPE_OBELISK_1;
     private int detectedTid = -1;
     private long lastPipeSwapNs = 0L;
-    private double detectTagElapsedS = 0.0; // ✅ NEW
+    private double detectTagElapsedS = 0.0;
 
     // Pre-advance sets
     private int preAdvanceTotalPreloads = 0;
@@ -112,7 +112,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     // Spin-up timing
     private double spinupElapsedS = 0.0;
 
-    // ✅ default to PPG (fallback when we can’t see tag)
+    // default to PPG (fallback when we can’t see tag)
     private int tidToUse = TID_PPG;
 
     // Launch trigger guards
@@ -169,6 +169,10 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();
 
+        // Optional tuning (if you want intake-advance slightly softer than pre-advance):
+        // indexer.setIntakeAdvancePower(0.42);
+        // indexer.setIntakeAdvanceSettleDelay(0.20);
+
         flywheel = new Flywheel("flywheelRight", "flywheelLeft");
         flywheel.init(hardwareMap);
 
@@ -219,14 +223,14 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         activePipeline = PIPE_OBELISK_1;
                         llVision.setPipeline(activePipeline);
                         lastPipeSwapNs = System.nanoTime();
-                        detectTagElapsedS = 0.0; // ✅ NEW
+                        detectTagElapsedS = 0.0;
                         phase = Phase.DETECT_TAG;
                     }
                     break;
                 }
 
                 case DETECT_TAG: {
-                    detectTagElapsedS += dt; // ✅ NEW
+                    detectTagElapsedS += dt;
 
                     long now = System.nanoTime();
                     if ((now - lastPipeSwapNs) / 1e6 > 50) {
@@ -241,9 +245,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         int tid = llVision.getTid();
                         if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
                             detectedTid = tid;
-                            tidToUse = tid; // overwrite fallback
+                            tidToUse = tid;
 
-                            // proceed immediately once we have it
                             preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
                             preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
@@ -254,9 +257,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         }
                     }
 
-                    // ✅ NEW: timeout fallback to PPG
                     if (detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
-                        // tidToUse already = PPG
                         preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
                         preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
@@ -269,15 +270,18 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_LAUNCH_PRELOADS: {
                     if (preAdvanceRemainingPreloads > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingPreloads--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingPreloads == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_PRELOADS;
                     }
@@ -330,14 +334,19 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake advance (matches pre-advance behavior)
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakePurple12, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE12;
                     }
@@ -359,14 +368,19 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakeGreen11, true);
                         phase = Phase.DRIVE_INTAKE_GREEN11;
                     }
@@ -399,15 +413,18 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_LAUNCH_FIRST_ROW: {
                     if (preAdvanceRemainingRow1 > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingRow1--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow1 == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_FIRST_ROW;
                     }
@@ -460,14 +477,19 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakeGreen21, true);
                         phase = Phase.DRIVE_INTAKE_GREEN21;
                     }
@@ -489,14 +511,19 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakePurple22, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE22;
                     }
@@ -529,15 +556,18 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case DRIVE_LAUNCH_SECOND_ROW: {
                     if (preAdvanceRemainingRow2 > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingRow2--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow2 == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_SECOND_ROW;
                     }
@@ -584,6 +614,13 @@ public class BlueCloseAutoHigh extends LinearOpMode {
             telemetry.addData("Detected TID", detectedTid);
             telemetry.addData("Using Pattern (fallback=PPG)", tidToUse);
             telemetry.addData("TagDetectElapsed", "%.2f", detectTagElapsedS);
+            telemetry.addData("Preloads pre-adv rem", preAdvanceRemainingPreloads);
+            telemetry.addData("Row1 pre-adv rem", preAdvanceRemainingRow1);
+            telemetry.addData("Row2 pre-adv rem", preAdvanceRemainingRow2);
+            telemetry.addData("Indexer moving", indexer.isMoving());
+            telemetry.addData("Indexer preAdv", indexer.isPreAdvancing());
+            telemetry.addData("Indexer intakeAdv", indexer.isIntakeAdvancing());
+            telemetry.addData("Indexer auto", indexer.isAutoRunning());
             telemetry.update();
         }
 
@@ -615,7 +652,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         return 0;
     }
 
-    // Row1 mapping (NEW): PPG → 2, PGP → 0, GPP → 1
+    // Row1 mapping: PPG → 2, PGP → 0, GPP → 1
     private int computePreAdvanceRow1(int tid) {
         if (tid == TID_PPG) return 2;
         if (tid == TID_PGP) return 0;
@@ -623,17 +660,12 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         return 0;
     }
 
-    // Row2 mapping (NEW): PPG → 1, PGP → 2, GPP → 0
+    // Row2 mapping: PPG → 1, PGP → 2, GPP → 0
     private int computePreAdvanceRow2(int tid) {
         if (tid == TID_PPG) return 1;
         if (tid == TID_PGP) return 2;
         if (tid == TID_GPP) return 0;
         return 0;
-    }
-
-    private static String poseStr(Pose p) {
-        return String.format("(%.2f, %.2f, %.1f°)",
-                p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
     }
 
     // ===== Paths wired to the pose constants =====

@@ -27,6 +27,10 @@ public class RedCloseAutoHigh extends LinearOpMode {
     private static final int TID_PGP = 22;
     private static final int TID_PPG = 23;
 
+    // ===== Fallback if tag not detected =====
+    private static final double TAG_DETECT_TIMEOUT_S = 1.25; // how long we try to see tag before defaulting
+    private static final double PIPE_SWAP_PERIOD_MS = 50.0;  // pipeline cycle rate during detect
+
     // ===== Flywheel (CLOSE) gates =====
     private static final double SPINUP_MIN_WAIT_S = 0.60;
     private static final double SPINUP_TIMEOUT_S  = 2.00;
@@ -40,53 +44,28 @@ public class RedCloseAutoHigh extends LinearOpMode {
     private static final double INTAKE_SETTLE_S = 0.65;
 
     // ===== Field Poses (inches, radians) – RED SIDE (mirrored from blue) =====
-    // These were computed assuming X is 0–144 and mirroring around X=72:
-    // x' = 144 - x, heading' = 180° - heading
+    private static final Pose START_POSE = new Pose(123.539, 123.153, Math.toRadians(126.0));
 
-    // Start pose (mirrored)
-    private static final Pose START_POSE = new Pose(
-            123.539, 123.153, Math.toRadians(126.0));
-
-    // AprilTag scan move
     private static final Pose APRILTAG_POSE_START = START_POSE;
-    private static final Pose APRILTAG_POSE_END   = new Pose(
-            94, 94, Math.toRadians(106.0));
+    private static final Pose APRILTAG_POSE_END   = new Pose(94, 94, Math.toRadians(106.0));
 
-    // Launch preloads pose
-    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(
-            97, 105, Math.toRadians(30.0));
+    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(97, 105, Math.toRadians(30.0));
 
-    // Row 1 intake line
-    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(
-            96.568, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_P11_POSE      = new Pose(
-            105.166, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_P12_POSE      = new Pose(
-            109.957, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_G11_POSE      = new Pose(
-            116.976, 86.477, Math.toRadians(0.0));
+    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(96.568, 86.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_P11_POSE      = new Pose(105.166, 86.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_P12_POSE      = new Pose(109.957, 86.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_G11_POSE      = new Pose(116.976, 86.477, Math.toRadians(0.0));
 
-    // Launch pose for first row (independent)
-    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(
-            97, 105, Math.toRadians(40));   // tune on-field for Row 1
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(97, 105, Math.toRadians(40));
 
-    // Row 2 intake line
-    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(
-            96.306, 62.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_P21_POSE      = new Pose(
-            103.973, 62.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_G21_POSE      = new Pose(
-            109.378, 62.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_P22_POSE      = new Pose(
-            116.590, 62.928, Math.toRadians(0.0));
+    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(96.306, 62.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_P21_POSE      = new Pose(103.973, 62.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_G21_POSE      = new Pose(109.378, 62.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_P22_POSE      = new Pose(116.590, 62.928, Math.toRadians(0.0));
 
-    // Launch pose for second row (independent from first row)
-    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(
-            97, 105, Math.toRadians(35.0));  // tune separately for Row 2
+    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(97, 105, Math.toRadians(35.0));
 
-    // Final park
-    private static final Pose PARK_POSE = new Pose(
-            115.432, 75.475, Math.toRadians(90.0));
+    private static final Pose PARK_POSE = new Pose(115.432, 75.475, Math.toRadians(90.0));
 
     // ===== Devices =====
     private Limelight3A limelight;
@@ -123,6 +102,9 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     // Spin-up timing
     private double spinupElapsedS = 0.0;
+
+    // Tag detection elapsed (so we can timeout)
+    private double detectTagElapsedS = 0.0;
 
     // Which tag pattern we ended up using
     private int tidToUse = -1;
@@ -181,6 +163,10 @@ public class RedCloseAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();
 
+        // (Optional) If you want intake-advance slightly softer/different than defaults:
+        // indexer.setIntakeAdvancePower(0.42);
+        // indexer.setIntakeAdvanceSettleDelay(0.20);
+
         flywheel = new Flywheel("flywheelRight", "flywheelLeft");
         flywheel.init(hardwareMap);
 
@@ -193,25 +179,9 @@ public class RedCloseAutoHigh extends LinearOpMode {
         follower.setStartingPose(START_POSE);
         paths = new Paths(follower);
 
-        // Start with normal drive power
         setDrivePowerNormal();
 
         telemetry.addLine("RedCloseAutoHigh: Ready. Will detect tags after AprilTagPosition.");
-        telemetry.addData("Pose Start", poseStr(START_POSE));
-        telemetry.addData("Pose AprilTag Start", poseStr(APRILTAG_POSE_START));
-        telemetry.addData("Pose AprilTag End", poseStr(APRILTAG_POSE_END));
-        telemetry.addData("Pose Launch Preloads", poseStr(LAUNCH_PRELOADS_POSE));
-        telemetry.addData("Pose Align Intake 1", poseStr(ALIGN_INTAKE1_POSE));
-        telemetry.addData("Pose P11", poseStr(INTAKE_P11_POSE));
-        telemetry.addData("Pose P12", poseStr(INTAKE_P12_POSE));
-        telemetry.addData("Pose G11", poseStr(INTAKE_G11_POSE));
-        telemetry.addData("Pose Launch Row1", poseStr(LAUNCH_FIRST_ROW_POSE));
-        telemetry.addData("Pose Align Intake 2", poseStr(ALIGN_INTAKE2_POSE));
-        telemetry.addData("Pose P21", poseStr(INTAKE_P21_POSE));
-        telemetry.addData("Pose G21", poseStr(INTAKE_G21_POSE));
-        telemetry.addData("Pose P22", poseStr(INTAKE_P22_POSE));
-        telemetry.addData("Pose Launch Row2", poseStr(LAUNCH_SECOND_ROW_POSE));
-        telemetry.addData("Pose Park", poseStr(PARK_POSE));
         telemetry.update();
 
         // ===== INIT loop =====
@@ -219,9 +189,14 @@ public class RedCloseAutoHigh extends LinearOpMode {
             telemetry.update();
             sleep(30);
         }
+        if (isStopRequested()) return;
 
         // ===== RUN =====
         long lastNs = System.nanoTime();
+
+        // Match Blue behavior: default fallback is PPG unless overwritten
+        tidToUse = TID_PPG;
+        detectedTid = -1;
 
         flywheel.setState(Flywheel.State.CLOSE);
         follower.followPath(paths.AprilTagPosition, true);
@@ -237,20 +212,22 @@ public class RedCloseAutoHigh extends LinearOpMode {
             follower.update();
 
             switch (phase) {
-                // --- Drive to Tag viewing pose ---
                 case DRIVE_APRILTAG_POSITION: {
                     if (!follower.isBusy()) {
                         activePipeline = PIPE_OBELISK_1;
                         llVision.setPipeline(activePipeline);
                         lastPipeSwapNs = System.nanoTime();
+                        detectTagElapsedS = 0.0;
                         phase = Phase.DETECT_TAG;
                     }
                     break;
                 }
 
                 case DETECT_TAG: {
+                    detectTagElapsedS += dt;
+
                     long now = System.nanoTime();
-                    if ((now - lastPipeSwapNs) / 1e6 > 50) {
+                    if ((now - lastPipeSwapNs) / 1e6 > PIPE_SWAP_PERIOD_MS) {
                         activePipeline = (activePipeline == PIPE_OBELISK_1)
                                 ? PIPE_OBELISK_2
                                 : (activePipeline == PIPE_OBELISK_2 ? PIPE_OBELISK_3 : PIPE_OBELISK_1);
@@ -262,32 +239,46 @@ public class RedCloseAutoHigh extends LinearOpMode {
                         int tid = llVision.getTid();
                         if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
                             detectedTid = tid;
-                            tidToUse = tid;
-
-                            // Preloads mapping
-                            preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
-                            preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
-
-                            setDrivePowerNormal();
-                            follower.followPath(paths.LaunchPreloads, true);
-                            phase = Phase.DRIVE_LAUNCH_PRELOADS;
+                            tidToUse = tid; // overwrite fallback
                         }
+                    }
+
+                    // If we got a valid tag OR we timed out, continue.
+                    if ((tidToUse == TID_GPP || tidToUse == TID_PGP || tidToUse == TID_PPG)
+                            || detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
+
+                        // (tidToUse already defaults to PPG; keep this for safety)
+                        if (tidToUse != TID_GPP && tidToUse != TID_PGP && tidToUse != TID_PPG) {
+                            tidToUse = TID_PPG;
+                        }
+
+                        preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
+                        preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
+
+                        setDrivePowerNormal();
+                        follower.followPath(paths.LaunchPreloads, true);
+                        phase = Phase.DRIVE_LAUNCH_PRELOADS;
                     }
                     break;
                 }
 
                 // --- Launch preloads ---
                 case DRIVE_LAUNCH_PRELOADS: {
+                    // ✅ match Blue: gentle pre-advance (slower + settle)
                     if (preAdvanceRemainingPreloads > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingPreloads--;
                     }
 
+                    // ✅ match Blue: gate on !isPreAdvancing()
                     if (!follower.isBusy()
                             && preAdvanceRemainingPreloads == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_PRELOADS;
                     }
@@ -341,14 +332,19 @@ public class RedCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ match Blue: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakePurple12, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE12;
                     }
@@ -370,14 +366,19 @@ public class RedCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ match Blue: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakeGreen11, true);
                         phase = Phase.DRIVE_INTAKE_GREEN11;
                     }
@@ -410,16 +411,20 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 1 ---
                 case DRIVE_LAUNCH_FIRST_ROW: {
+                    // ✅ match Blue: gentle pre-advance
                     if (preAdvanceRemainingRow1 > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingRow1--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow1 == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_FIRST_ROW;
                     }
@@ -473,14 +478,19 @@ public class RedCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ match Blue: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakeGreen21, true);
                         phase = Phase.DRIVE_INTAKE_GREEN21;
                     }
@@ -502,14 +512,19 @@ public class RedCloseAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ match Blue: gentle intake advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakePurple22, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE22;
                     }
@@ -542,16 +557,20 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 2 ---
                 case DRIVE_LAUNCH_SECOND_ROW: {
+                    // ✅ match Blue: gentle pre-advance
                     if (preAdvanceRemainingRow2 > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingRow2--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow2 == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_SECOND_ROW;
                     }
@@ -596,18 +615,15 @@ public class RedCloseAutoHigh extends LinearOpMode {
             telemetry.addData("HasTarget", llVision.hasTarget());
             telemetry.addData("TID", llVision.getTid());
             telemetry.addData("Detected TID", detectedTid);
+            telemetry.addData("TID To Use", tidToUse);
+            telemetry.addData("Tag Detect Elapsed", "%.2f / %.2f", detectTagElapsedS, TAG_DETECT_TIMEOUT_S);
             telemetry.addData("Preloads pre-adv rem", preAdvanceRemainingPreloads);
             telemetry.addData("Row1 pre-adv rem", preAdvanceRemainingRow1);
             telemetry.addData("Row2 pre-adv rem", preAdvanceRemainingRow2);
-            telemetry.addData("FW Target RPM", "%.0f", flywheel.getTargetRpm());
-            telemetry.addData("FW Right RPM", "%.0f", flywheel.getMeasuredRightRpm());
-            telemetry.addData("FW Left RPM", "%.0f", flywheel.getMeasuredLeftRpm());
-            telemetry.addData("Spinup Elapsed (s)", "%.2f", spinupElapsedS);
-            telemetry.addData("Indexer Auto", indexer.isAutoRunning());
-            telemetry.addData("Indexer Moving", indexer.isMoving());
-            telemetry.addData("Intake Active", intakeActive);
-            telemetry.addData("Intake Settle (s)", "%.2f", intakeSettleTimerS);
-            telemetry.addData("Pose", poseStr(follower.getPose()));
+            telemetry.addData("Indexer moving", indexer.isMoving());
+            telemetry.addData("Indexer preAdv", indexer.isPreAdvancing());
+            telemetry.addData("Indexer intakeAdv", indexer.isIntakeAdvancing());
+            telemetry.addData("Indexer auto", indexer.isAutoRunning());
             telemetry.update();
         }
 
@@ -618,16 +634,10 @@ public class RedCloseAutoHigh extends LinearOpMode {
     }
 
     // ===== Drive power helpers =====
-    private void setDrivePowerNormal() {
-        follower.setMaxPower(MAX_POWER_NORMAL);
-    }
-
-    private void setDrivePowerIntake() {
-        follower.setMaxPower(MAX_POWER_INTAKE);
-    }
+    private void setDrivePowerNormal() { follower.setMaxPower(MAX_POWER_NORMAL); }
+    private void setDrivePowerIntake() { follower.setMaxPower(MAX_POWER_INTAKE); }
 
     // ===== Helpers =====
-
     private boolean flywheelReady() {
         double target = flywheel.getTargetRpm();
         double errR = Math.abs(flywheel.getMeasuredRightRpm() - target);
@@ -635,15 +645,8 @@ public class RedCloseAutoHigh extends LinearOpMode {
         return target > 0 && errR < RPM_TOL && errL < RPM_TOL && (spinupElapsedS >= SPINUP_MIN_WAIT_S);
     }
 
-    private void intakeStart() {
-        intakeActive = true;
-        intakeMotor.setPower(1.0);
-    }
-
-    private void intakeStop() {
-        intakeActive = false;
-        intakeMotor.setPower(0.0);
-    }
+    private void intakeStart() { intakeActive = true; intakeMotor.setPower(1.0); }
+    private void intakeStop()  { intakeActive = false; intakeMotor.setPower(0.0); }
 
     // Preloads mapping: PPG → 0, PGP → 1, GPP → 2
     private int computePreAdvancePreloads(int tid) {
@@ -653,7 +656,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
         return 0;
     }
 
-    // Row1 mapping: PPG → 2, PGP → 0, GPP → 1
+    // NOTE: leaving your existing mapping exactly as provided in this file.
     private int computePreAdvanceRow1(int tid) {
         if (tid == TID_PPG) return 0;
         if (tid == TID_PGP) return 1;
@@ -661,23 +664,12 @@ public class RedCloseAutoHigh extends LinearOpMode {
         return 0;
     }
 
-    // Row2 mapping: PPG → 1, PGP → 2, GPP → 0
+    // NOTE: leaving your existing mapping exactly as provided in this file.
     private int computePreAdvanceRow2(int tid) {
         if (tid == TID_PPG) return 2;
         if (tid == TID_PGP) return 0;
         if (tid == TID_GPP) return 1;
         return 0;
-    }
-
-    private static String poseStr(Pose p) {
-        return String.format("(%.2f, %.2f, %.1f°)",
-                p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
-    }
-
-    @SuppressWarnings("unused")
-    private static double angleErrorDeg(double currentDeg, double targetDeg) {
-        double err = (targetDeg - currentDeg + 540.0) % 360.0 - 180.0;
-        return err;
     }
 
     // ===== Paths wired to the pose constants =====
@@ -699,147 +691,81 @@ public class RedCloseAutoHigh extends LinearOpMode {
         public Paths(Follower follower) {
             AprilTagPosition = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            APRILTAG_POSE_START,
-                            APRILTAG_POSE_END
-                    ))
-                    .setLinearHeadingInterpolation(
-                            APRILTAG_POSE_START.getHeading(),
-                            APRILTAG_POSE_END.getHeading())
+                    .addPath(new BezierLine(APRILTAG_POSE_START, APRILTAG_POSE_END))
+                    .setLinearHeadingInterpolation(APRILTAG_POSE_START.getHeading(), APRILTAG_POSE_END.getHeading())
                     .build();
 
             LaunchPreloads = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            APRILTAG_POSE_END,
-                            LAUNCH_PRELOADS_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            APRILTAG_POSE_END.getHeading(),
-                            LAUNCH_PRELOADS_POSE.getHeading())
+                    .addPath(new BezierLine(APRILTAG_POSE_END, LAUNCH_PRELOADS_POSE))
+                    .setLinearHeadingInterpolation(APRILTAG_POSE_END.getHeading(), LAUNCH_PRELOADS_POSE.getHeading())
                     .build();
 
             AlignIntake1 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            LAUNCH_PRELOADS_POSE,
-                            ALIGN_INTAKE1_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            LAUNCH_PRELOADS_POSE.getHeading(),
-                            ALIGN_INTAKE1_POSE.getHeading())
+                    .addPath(new BezierLine(LAUNCH_PRELOADS_POSE, ALIGN_INTAKE1_POSE))
+                    .setLinearHeadingInterpolation(LAUNCH_PRELOADS_POSE.getHeading(), ALIGN_INTAKE1_POSE.getHeading())
                     .build();
 
             IntakePurple11 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            ALIGN_INTAKE1_POSE,
-                            INTAKE_P11_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            ALIGN_INTAKE1_POSE.getHeading(),
-                            INTAKE_P11_POSE.getHeading())
+                    .addPath(new BezierLine(ALIGN_INTAKE1_POSE, INTAKE_P11_POSE))
+                    .setLinearHeadingInterpolation(ALIGN_INTAKE1_POSE.getHeading(), INTAKE_P11_POSE.getHeading())
                     .build();
 
             IntakePurple12 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            INTAKE_P11_POSE,
-                            INTAKE_P12_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            INTAKE_P11_POSE.getHeading(),
-                            INTAKE_P12_POSE.getHeading())
+                    .addPath(new BezierLine(INTAKE_P11_POSE, INTAKE_P12_POSE))
+                    .setLinearHeadingInterpolation(INTAKE_P11_POSE.getHeading(), INTAKE_P12_POSE.getHeading())
                     .build();
 
             IntakeGreen11 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            INTAKE_P12_POSE,
-                            INTAKE_G11_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            INTAKE_P12_POSE.getHeading(),
-                            INTAKE_G11_POSE.getHeading())
+                    .addPath(new BezierLine(INTAKE_P12_POSE, INTAKE_G11_POSE))
+                    .setLinearHeadingInterpolation(INTAKE_P12_POSE.getHeading(), INTAKE_G11_POSE.getHeading())
                     .build();
 
             LaunchFirstRow = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            INTAKE_G11_POSE,
-                            LAUNCH_FIRST_ROW_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            INTAKE_G11_POSE.getHeading(),
-                            LAUNCH_FIRST_ROW_POSE.getHeading())
+                    .addPath(new BezierLine(INTAKE_G11_POSE, LAUNCH_FIRST_ROW_POSE))
+                    .setLinearHeadingInterpolation(INTAKE_G11_POSE.getHeading(), LAUNCH_FIRST_ROW_POSE.getHeading())
                     .build();
 
             AlignIntake2 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            LAUNCH_FIRST_ROW_POSE,
-                            ALIGN_INTAKE2_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            LAUNCH_FIRST_ROW_POSE.getHeading(),
-                            ALIGN_INTAKE2_POSE.getHeading())
+                    .addPath(new BezierLine(LAUNCH_FIRST_ROW_POSE, ALIGN_INTAKE2_POSE))
+                    .setLinearHeadingInterpolation(LAUNCH_FIRST_ROW_POSE.getHeading(), ALIGN_INTAKE2_POSE.getHeading())
                     .build();
 
             IntakePurple21 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            ALIGN_INTAKE2_POSE,
-                            INTAKE_P21_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            ALIGN_INTAKE2_POSE.getHeading(),
-                            INTAKE_P21_POSE.getHeading())
+                    .addPath(new BezierLine(ALIGN_INTAKE2_POSE, INTAKE_P21_POSE))
+                    .setLinearHeadingInterpolation(ALIGN_INTAKE2_POSE.getHeading(), INTAKE_P21_POSE.getHeading())
                     .build();
 
             IntakeGreen21 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            INTAKE_P21_POSE,
-                            INTAKE_G21_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            INTAKE_P21_POSE.getHeading(),
-                            INTAKE_G21_POSE.getHeading())
+                    .addPath(new BezierLine(INTAKE_P21_POSE, INTAKE_G21_POSE))
+                    .setLinearHeadingInterpolation(INTAKE_P21_POSE.getHeading(), INTAKE_G21_POSE.getHeading())
                     .build();
 
             IntakePurple22 = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            INTAKE_G21_POSE,
-                            INTAKE_P22_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            INTAKE_G21_POSE.getHeading(),
-                            INTAKE_P22_POSE.getHeading())
+                    .addPath(new BezierLine(INTAKE_G21_POSE, INTAKE_P22_POSE))
+                    .setLinearHeadingInterpolation(INTAKE_G21_POSE.getHeading(), INTAKE_P22_POSE.getHeading())
                     .build();
 
             LaunchSecondRow = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            INTAKE_P22_POSE,
-                            LAUNCH_SECOND_ROW_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            INTAKE_P22_POSE.getHeading(),
-                            LAUNCH_SECOND_ROW_POSE.getHeading())
+                    .addPath(new BezierLine(INTAKE_P22_POSE, LAUNCH_SECOND_ROW_POSE))
+                    .setLinearHeadingInterpolation(INTAKE_P22_POSE.getHeading(), LAUNCH_SECOND_ROW_POSE.getHeading())
                     .build();
 
             Park = follower
                     .pathBuilder()
-                    .addPath(new BezierLine(
-                            LAUNCH_SECOND_ROW_POSE,
-                            PARK_POSE
-                    ))
-                    .setLinearHeadingInterpolation(
-                            LAUNCH_SECOND_ROW_POSE.getHeading(),
-                            PARK_POSE.getHeading())
+                    .addPath(new BezierLine(LAUNCH_SECOND_ROW_POSE, PARK_POSE))
+                    .setLinearHeadingInterpolation(LAUNCH_SECOND_ROW_POSE.getHeading(), PARK_POSE.getHeading())
                     .build();
         }
     }
 }
-
