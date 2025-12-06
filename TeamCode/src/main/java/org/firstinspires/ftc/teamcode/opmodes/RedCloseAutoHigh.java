@@ -106,8 +106,8 @@ public class RedCloseAutoHigh extends LinearOpMode {
     // Tag detection elapsed (so we can timeout)
     private double detectTagElapsedS = 0.0;
 
-    // Which tag pattern we ended up using
-    private int tidToUse = -1;
+    // Which tag pattern we ended up using (fallback default)
+    private int tidToUse = TID_PPG;
 
     // Launch trigger guards
     private boolean launchPreloadsStarted = false;
@@ -149,6 +149,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
         DRIVE_PARK,
         DONE
     }
+
     private Phase phase = Phase.DRIVE_APRILTAG_POSITION;
 
     @Override
@@ -182,6 +183,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
         setDrivePowerNormal();
 
         telemetry.addLine("RedCloseAutoHigh: Ready. Will detect tags after AprilTagPosition.");
+        telemetry.addData("Fallback Pattern", "PPG (TID 23)");
         telemetry.update();
 
         // ===== INIT loop =====
@@ -235,6 +237,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
                         lastPipeSwapNs = now;
                     }
 
+                    // "Last seen wins" during the detect window
                     if (llVision.hasTarget()) {
                         int tid = llVision.getTid();
                         if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
@@ -243,12 +246,11 @@ public class RedCloseAutoHigh extends LinearOpMode {
                         }
                     }
 
-                    // If we got a valid tag OR we timed out, continue.
-                    if ((tidToUse == TID_GPP || tidToUse == TID_PGP || tidToUse == TID_PPG)
-                            || detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
+                    // ✅ FIX: Only continue if we SAW a valid tag OR we timed out
+                    if (detectedTid != -1 || detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
 
-                        // (tidToUse already defaults to PPG; keep this for safety)
-                        if (tidToUse != TID_GPP && tidToUse != TID_PGP && tidToUse != TID_PPG) {
+                        // If we never saw a valid tag, stay with fallback PPG
+                        if (detectedTid == -1) {
                             tidToUse = TID_PPG;
                         }
 
@@ -613,7 +615,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
             telemetry.addData("Phase", phase);
             telemetry.addData("ActivePipe", activePipeline);
             telemetry.addData("HasTarget", llVision.hasTarget());
-            telemetry.addData("TID", llVision.getTid());
+            telemetry.addData("Cam TID", llVision.getTid());
             telemetry.addData("Detected TID", detectedTid);
             telemetry.addData("TID To Use", tidToUse);
             telemetry.addData("Tag Detect Elapsed", "%.2f / %.2f", detectTagElapsedS, TAG_DETECT_TIMEOUT_S);

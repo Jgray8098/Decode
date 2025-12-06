@@ -119,9 +119,9 @@ public class RedFarAutoHigh extends LinearOpMode {
     // Spin-up timing
     private double spinupElapsedS = 0.0;
 
-    // Which tag pattern we ended up using (frozen at START)
-    private int tidToUse = -1;
-    private boolean usedFallbackPPG = false;
+    // ✅ UPDATED: default to PPG if we never see a valid tag during INIT
+    private int tidToUse = TID_PPG;
+    private boolean usedFallbackPPG = true; // will flip false if we see ANY valid tag during INIT
 
     // Launch trigger guards
     private boolean launchPreloadsStarted = false;
@@ -175,6 +175,10 @@ public class RedFarAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();   // Auto owns the encoder zero
 
+        // (Optional) If you want intake-advance slightly softer/different than defaults:
+        // indexer.setIntakeAdvancePower(0.42);
+        // indexer.setIntakeAdvanceSettleDelay(0.20);
+
         flywheel = new Flywheel("flywheelRight", "flywheelLeft");
         flywheel.init(hardwareMap);
 
@@ -191,6 +195,7 @@ public class RedFarAutoHigh extends LinearOpMode {
         setDrivePowerNormal();
 
         telemetry.addLine("RedFarAutoHigh: INIT – scanning AprilTag until START (last seen wins)");
+        telemetry.addData("Default Pattern", "PPG (TID 23) if no tag seen");
         telemetry.addData("Pose Start", poseStr(START_POSE));
         telemetry.addData("Pose Launch Preloads", poseStr(LAUNCH_PRELOADS_POSE));
         telemetry.addData("Pose Align Intake 1", poseStr(ALIGN_INTAKE1_POSE));
@@ -220,12 +225,13 @@ public class RedFarAutoHigh extends LinearOpMode {
                 lastPipeSwapNs = nowNs;
             }
 
-            // "Last seen wins"
+            // "Last seen wins" (but true fallback stays PPG if we never saw any valid tag)
             if (llVision.hasTarget()) {
                 int tid = llVision.getTid();
                 if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
                     detectedTid = tid;
                     tidToUse = tid;
+                    usedFallbackPPG = false; // saw a valid tag sometime in INIT
                 }
             }
 
@@ -234,7 +240,8 @@ public class RedFarAutoHigh extends LinearOpMode {
             telemetry.addData("HasTarget", llVision.hasTarget());
             telemetry.addData("Cam TID", llVision.getTid());
             telemetry.addData("Last Seen Valid TID", detectedTid);
-            telemetry.addData("TID To Use (if started now)", tidToUse);
+            telemetry.addData("TID To Use (frozen at START)", tidToUse);
+            telemetry.addData("Fallback PPG?", (detectedTid == -1));
             telemetry.update();
 
             sleep(20);
@@ -245,8 +252,8 @@ public class RedFarAutoHigh extends LinearOpMode {
 
         long lastNs = System.nanoTime();
 
-        // Freeze decision now: if never saw a valid tid during INIT -> default PPG
-        if (tidToUse != TID_GPP && tidToUse != TID_PGP && tidToUse != TID_PPG) {
+        // ✅ UPDATED: Freeze decision now: if never saw a valid tid during INIT -> default PPG
+        if (detectedTid == -1) {
             tidToUse = TID_PPG;
             usedFallbackPPG = true;
         } else {
@@ -277,16 +284,21 @@ public class RedFarAutoHigh extends LinearOpMode {
             switch (phase) {
                 // --- Launch preloads ---
                 case DRIVE_LAUNCH_PRELOADS: {
+                    // ✅ UPDATED: gentle pre-advance + settle state machine
                     if (preAdvanceRemainingPreloads > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingPreloads--;
                     }
 
+                    // ✅ UPDATED: also gate on !isPreAdvancing()
                     if (!follower.isBusy()
                             && preAdvanceRemainingPreloads == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_PRELOADS;
                     }
@@ -340,14 +352,19 @@ public class RedFarAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake-advance (matches Blue/Red Close autos)
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakePurple12, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE12;
                     }
@@ -369,14 +386,19 @@ public class RedFarAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake-advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakeGreen11, true);
                         phase = Phase.DRIVE_INTAKE_GREEN11;
                     }
@@ -409,16 +431,20 @@ public class RedFarAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 1 ---
                 case DRIVE_LAUNCH_FIRST_ROW: {
+                    // ✅ UPDATED: gentle pre-advance
                     if (preAdvanceRemainingRow1 > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingRow1--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow1 == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_FIRST_ROW;
                     }
@@ -472,14 +498,19 @@ public class RedFarAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake-advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakeGreen21, true);
                         phase = Phase.DRIVE_INTAKE_GREEN21;
                     }
@@ -501,14 +532,19 @@ public class RedFarAutoHigh extends LinearOpMode {
                     if (!settleAdvanceIssued
                             && intakeSettleTimerS >= INTAKE_SETTLE_S
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+                        // ✅ UPDATED: gentle intake-advance
+                        indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
 
                     if (settleAdvanceIssued
                             && !indexer.isAutoRunning()
-                            && !indexer.isMoving()) {
+                            && !indexer.isMoving()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
                         follower.followPath(paths.IntakePurple22, true);
                         phase = Phase.DRIVE_INTAKE_PURPLE22;
                     }
@@ -541,16 +577,20 @@ public class RedFarAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 2 ---
                 case DRIVE_LAUNCH_SECOND_ROW: {
+                    // ✅ UPDATED: gentle pre-advance
                     if (preAdvanceRemainingRow2 > 0
-                            && !indexer.isMoving() && !indexer.isAutoRunning()) {
-                        indexer.advanceOneSlot();
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
                         preAdvanceRemainingRow2--;
                     }
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow2 == 0
                             && !indexer.isMoving()
-                            && !indexer.isAutoRunning()) {
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_SECOND_ROW;
                     }
@@ -604,6 +644,8 @@ public class RedFarAutoHigh extends LinearOpMode {
             telemetry.addData("Spinup Elapsed (s)", "%.2f", spinupElapsedS);
             telemetry.addData("Indexer Auto", indexer.isAutoRunning());
             telemetry.addData("Indexer Moving", indexer.isMoving());
+            telemetry.addData("Indexer PreAdv", indexer.isPreAdvancing());
+            telemetry.addData("Indexer IntakeAdv", indexer.isIntakeAdvancing());
             telemetry.addData("Intake Active", intakeActive);
             telemetry.addData("Intake Settle (s)", "%.2f", intakeSettleTimerS);
             telemetry.addData("Pose", poseStr(follower.getPose()));
