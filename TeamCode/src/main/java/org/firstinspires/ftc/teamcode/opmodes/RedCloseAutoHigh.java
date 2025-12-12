@@ -49,7 +49,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
     private static final Pose APRILTAG_POSE_START = START_POSE;
     private static final Pose APRILTAG_POSE_END   = new Pose(94, 94, Math.toRadians(106.0));
 
-    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(97, 105, Math.toRadians(30.0));
+    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(97, 105, Math.toRadians(32.0));
 
     private static final Pose ALIGN_INTAKE1_POSE   = new Pose(96.568, 86.477, Math.toRadians(0.0));
     private static final Pose INTAKE_P11_POSE      = new Pose(105.166, 86.477, Math.toRadians(0.0));
@@ -65,7 +65,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(97, 105, Math.toRadians(35.0));
 
-    private static final Pose PARK_POSE = new Pose(115.432, 75.475, Math.toRadians(90.0));
+    private static final Pose PARK_POSE = new Pose(115.432, 75.475, Math.toRadians(0.0));
 
     // ===== Devices =====
     private Limelight3A limelight;
