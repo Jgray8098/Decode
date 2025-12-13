@@ -32,6 +32,9 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final double SPINUP_TIMEOUT_S  = 2.00;
     private static final double RPM_TOL           = 60.0;
 
+    // Small extra settle time at launch pose before firing preloads
+    private static final double PRELOAD_LAUNCH_SETTLE_S = 0.50;
+
     // ===== Drive power profiles =====
     private static final double MAX_POWER_NORMAL = 1.0;
     private static final double MAX_POWER_INTAKE = 0.45;  // tweak (0.4–0.6)
@@ -50,7 +53,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose APRILTAG_POSE_END   = new Pose(47.099, 95.936, Math.toRadians(74));
 
     // Launch preloads pose
-    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(43.239, 99.989, Math.toRadians(145));
+    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(43.239, 99.989, Math.toRadians(146));
 
     // Row 1 intake line
     private static final Pose ALIGN_INTAKE1_POSE   = new Pose(44.432, 85.477, Math.toRadians(180));
@@ -112,6 +115,9 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     // Spin-up timing
     private double spinupElapsedS = 0.0;
 
+    // Extra settle at first launch pose
+    private double preloadSettleTimerS = 0.0;
+
     // default to PPG (fallback when we can’t see tag)
     private int tidToUse = TID_PPG;
 
@@ -144,7 +150,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         DRIVE_INTAKE_PURPLE21,
         WAIT_INDEXER_AFTER_P21,
         DRIVE_INTAKE_GREEN21,
-        WAIT_INDEXER_AFTER_G21,
+        WAIT_SETTLE_AFTER_G21,
         DRIVE_INTAKE_PURPLE22,
         WAIT_SETTLE_AFTER_P22,
 
@@ -283,6 +289,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isAutoRunning()
                             && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
+                        preloadSettleTimerS = 0.0;   // <-- start extra settle timer at pose
                         phase = Phase.ARRIVED_SPINUP_PRELOADS;
                     }
                     break;
@@ -290,7 +297,11 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
                 case ARRIVED_SPINUP_PRELOADS: {
                     spinupElapsedS += dt;
-                    if (flywheelReady() || spinupElapsedS >= SPINUP_TIMEOUT_S) {
+                    preloadSettleTimerS += dt;
+
+                    boolean aimSettled = (preloadSettleTimerS >= PRELOAD_LAUNCH_SETTLE_S) && !follower.isBusy();
+
+                    if ((flywheelReady() || spinupElapsedS >= SPINUP_TIMEOUT_S) && aimSettled) {
                         phase = Phase.FIRE_THREE_PRELOADS;
                     }
                     break;
@@ -337,7 +348,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance (matches pre-advance behavior)
+                        // gentle intake advance (matches pre-advance behavior)
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -371,7 +382,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
+                        // gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -480,7 +491,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
+                        // gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -500,12 +511,12 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     if (!follower.isBusy()) {
                         intakeSettleTimerS = 0.0;
                         settleAdvanceIssued = false;
-                        phase = Phase.WAIT_INDEXER_AFTER_G21;
+                        phase = Phase.WAIT_SETTLE_AFTER_G21;
                     }
                     break;
                 }
 
-                case WAIT_INDEXER_AFTER_G21: {
+                case WAIT_SETTLE_AFTER_G21: {
                     intakeSettleTimerS += dt;
 
                     if (!settleAdvanceIssued
@@ -514,7 +525,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
+                        // gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
