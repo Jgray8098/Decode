@@ -209,7 +209,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         tidToUse = TID_PPG;
         detectedTid = -1;
 
-        flywheel.setState(Flywheel.State.CLOSE);
+        flywheel.setState(Flywheel.State.CLOSE_AUTO);
 
         follower.followPath(paths.AprilTagPosition, true);
         phase = Phase.DRIVE_APRILTAG_POSITION;

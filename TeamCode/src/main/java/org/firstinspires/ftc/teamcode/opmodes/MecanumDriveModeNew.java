@@ -41,7 +41,7 @@ public class MecanumDriveModeNew extends OpMode {
 
     private DcMotor intakeMotor;
 
-    // Indexer (using built-in RUN_TO_POSITION, but with 0.8 power in TeleOp)
+    // Indexer
     private Indexer indexer;
     private boolean prevLB2 = false; // manual advance
     private boolean prevRB2 = false; // manual cam
@@ -73,10 +73,7 @@ public class MecanumDriveModeNew extends OpMode {
         intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
 
-        // Indexer for TeleOp:
-        //  - same mechanism as Auto
-        //  - use 0.8 power here (a bit safer than 1.0)
-        //  - no encoder reset so Auto's hardZero() carries through
+        // Indexer for TeleOp
         indexer = new Indexer(
                 "Indexer",
                 "camServo",
@@ -88,10 +85,12 @@ public class MecanumDriveModeNew extends OpMode {
         );
         indexer.setHomeCamOnInit(false);   // do NOT move the servo during TeleOp INIT
         indexer.init(hardwareMap);
-        indexer.setStepDelay(0.15);   // fast TeleOp cycle; adjust if needed
+        indexer.setStepDelay(0.15);
 
-        flywheel = new Flywheel("flywheelRight", "flywheelLeft");
+        // --------- Flywheel + Hood Servo (NEW) ---------
+        flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
+        flywheel.setHoodPositions(0.15, 0.5); // close, long (starting values)
 
         telemetry.addLine("[G1] LB=Hold Align, RB=Toggle Goal (BLUE↔RED)");
         telemetry.addLine("[G1] DPad L/R = change pipeline for SELECTED goal (wrap 0..9)");
@@ -100,15 +99,17 @@ public class MecanumDriveModeNew extends OpMode {
         telemetry.addLine("Auto:    GP2 B  = auto launch 3 balls (requires flywheel running).");
         telemetry.addLine("Intake:  GP2 Y = FORWARD while held, GP2 A = REVERSE while held.");
         telemetry.addLine("Flywheel (GP2): Dpad Up = CLOSE (toggle), Dpad Down = LONG (toggle).");
+        telemetry.addLine("Hood: follows Flywheel state (Close=0.0, Long=0.5).");
     }
 
     /** Allow pipeline slot edits during TeleOp INIT (before start). */
     @Override
     public void init_loop() {
         llVision.poll();
-        handleAlliancePipelineControls();   // G1 RB/DPad works during INIT too
-        pushVisionConfig();                 // apply any changes
+        handleAlliancePipelineControls();
+        pushVisionConfig();
         showTelemetryBasics(false);
+        telemetry.addData("Hood pos", "%.2f", flywheel.getHoodPosition());
         telemetry.update();
     }
 
@@ -116,6 +117,7 @@ public class MecanumDriveModeNew extends OpMode {
     public void start() {
         // TeleOp has officially started — safe to home the cam once
         indexer.homeCam();
+        flywheel.enableHoodControl(true);
     }
 
     @Override
@@ -124,7 +126,7 @@ public class MecanumDriveModeNew extends OpMode {
 
         // ===== Alliance toggle + pipeline slot adjust (G1) =====
         handleAlliancePipelineControls();
-        pushVisionConfig(); // apply any changes to Limelight
+        pushVisionConfig();
 
         long now = System.nanoTime();
         double dt = (now - lastNs) / 1e9;
@@ -143,10 +145,12 @@ public class MecanumDriveModeNew extends OpMode {
         // ---------- FLYWHEEL ----------
         boolean up2 = gamepad2.dpad_up;
         boolean down2 = gamepad2.dpad_down;
-        if (up2 && !prevUp2) flywheel.toggleClose();
-        if (down2 && !prevDown2) flywheel.toggleLong();
+        if (up2 && !prevUp2) flywheel.toggleClose(); // hood follows
+        if (down2 && !prevDown2) flywheel.toggleLong(); // hood follows
         prevUp2 = up2;
         prevDown2 = down2;
+
+        // update flywheel (and hood) every loop
         flywheel.update(dt);
 
         // Is launcher "running" (has a nonzero target)?
@@ -165,9 +169,6 @@ public class MecanumDriveModeNew extends OpMode {
                 && flywheelActive
                 && !indexer.isAutoRunning()
                 && !indexer.isMoving()) {
-            // If you implemented the continuous fast mode:
-            // indexer.startAutoLaunchAllThreeContinuous();
-            // If you're still on stepped mode, use:
             indexer.startAutoLaunchAllThreeContinuous();
         }
         prevB2 = b2;
@@ -194,6 +195,7 @@ public class MecanumDriveModeNew extends OpMode {
 
         // ---------- TELEMETRY ----------
         showTelemetryBasics(true);
+        telemetry.addData("Hood pos", "%.2f", flywheel.getHoodPosition());
         telemetry.addData("Intake power", "%.1f", intakePower);
         telemetry.addData("Indexer moving", indexer.isMoving());
         telemetry.addData("Cam open", indexer.isCamOpen());
@@ -247,7 +249,6 @@ public class MecanumDriveModeNew extends OpMode {
     /** Push current alliance+pipeline settings into Limelight. */
     private void pushVisionConfig() {
         llVision.setPipeline(selectedPipe);
-        // preferred TID already set when toggling; keep it updated for clarity
         llVision.setPreferredTid(selectedTid);
     }
 
@@ -276,6 +277,7 @@ public class MecanumDriveModeNew extends OpMode {
         }
     }
 }
+
 
 
 
