@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 /**
  * Flywheel mechanism using ONLY a custom PIDF velocity controller on BOTH motors.
@@ -12,11 +13,13 @@ import com.qualcomm.robotcore.hardware.Servo;
  * UPDATED:
  *  - Hood servo will NOT move during INIT.
  *  - Hood servo only moves after you enable it (call enableHoodControl(true) from OpMode.start()).
- *  - Added CLOSE_AUTO state @ 1200 RPM for Autonomous.
+ *  - NEW: Hood START position. On Play pressed, hood goes to hoodStartPos, and OFF state holds hoodStartPos.
+ *  - Added CLOSE_AUTO state @ 1275 RPM for Autonomous.
+ *  - Battery voltage compensation applied to feedforward (kF term).
  */
 public class Flywheel {
 
-    public enum State { OFF, CLOSE, LONG, CLOSE_AUTO }  // NEW
+    public enum State { OFF, CLOSE, LONG, CLOSE_AUTO }
 
     // --- Hardware names ---
     private final String rightName;
@@ -28,30 +31,37 @@ public class Flywheel {
     private DcMotorEx left;
     private Servo hood;
 
+    // Battery voltage
+    private VoltageSensor battery;
+    private static final double NOMINAL_VOLTAGE = 12.0;
+
     // --- Hood positions (tune these) ---
-    private double hoodClosePos = 0.0;
-    private double hoodLongPos  = 0.5;
-    private double lastHoodCmd  = -1.0;
+    // Start position: where hood sits when TeleOp starts and when flywheel is OFF
+    private double hoodStartPos     = 0.00;
+    private double hoodClosePos     = 0.15;
+    private double hoodLongPos      = 0.40;
+    private double lastHoodCmd      = -1.0;
 
     // Prevent hood movement until OpMode.start()
     private boolean hoodEnabled = false;
 
     // --- Encoder / kinematics constants ---
     private static final double MOTOR_TICKS_PER_REV = 28.0;
-    private static final double FLYWHEEL_PER_MOTOR  = 0.707; // flywheelRPM / motorRPM
+    // Use exact tooth ratio (motor pulley / flywheel pulley):
+    private static final double FLYWHEEL_PER_MOTOR  = 53.0 / 75.0; // 0.706666...
     private static final double MOTOR_MAX_RPM       = 6000.0;
     private static final double MOTOR_MAX_TPS       = (MOTOR_MAX_RPM * MOTOR_TICKS_PER_REV) / 60.0;
 
     // ---- Target flywheel speeds (RPM) ----
     private static final double CLOSE_FLYWHEEL_RPM      = 1400.0;
-    private static final double LONG_FLYWHEEL_RPM       = 2000.0;
-    private static final double CLOSE_AUTO_FLYWHEEL_RPM = 1200.0; // NEW
+    private static final double LONG_FLYWHEEL_RPM       = 1800.0;
+    private static final double CLOSE_AUTO_FLYWHEEL_RPM = 1275.0;
 
     // --- Custom PIDF (on ticks/sec) ---
     private double kP = 0.003;
     private double kI = 0.0000;
     private double kD = 0.000;
-    private double kF = 1.2 / MOTOR_MAX_TPS;
+    private double kF = 1.25 / MOTOR_MAX_TPS;
 
     private double iRight = 0, iLeft = 0;
     private double prevErrRight = 0, prevErrLeft = 0;
@@ -91,6 +101,11 @@ public class Flywheel {
         right = hw.get(DcMotorEx.class, rightName);
         left  = hw.get(DcMotorEx.class, leftName);
 
+        // Grab a voltage sensor (first one available)
+        if (hw.voltageSensor != null && hw.voltageSensor.iterator().hasNext()) {
+            battery = hw.voltageSensor.iterator().next();
+        }
+
         // Hood servo (optional) — DO NOT command position during INIT
         if (hoodName != null && !hoodName.isEmpty()) {
             hood = hw.get(Servo.class, hoodName);
@@ -111,12 +126,18 @@ public class Flywheel {
         lastPosRight = right.getCurrentPosition();
         lastPosLeft  = left.getCurrentPosition();
 
-        stop();
+        stop(); // hood will NOT move here because hoodEnabled=false during INIT
     }
 
-    /** Call from OpMode.start() to allow hood motion after Play is pressed. */
+    /**
+     * Call from OpMode.start() to allow hood motion after Play is pressed.
+     * When enabled, hood immediately goes to hoodStartPos.
+     */
     public void enableHoodControl(boolean enabled) {
         hoodEnabled = enabled;
+        if (hoodEnabled) {
+            setHoodPosition(hoodStartPos);
+        }
     }
 
     // --- State API ---
@@ -126,7 +147,7 @@ public class Flywheel {
     public void toggleClose() { state = (state == State.CLOSE) ? State.OFF : State.CLOSE; }
     public void toggleLong()  { state = (state == State.LONG)  ? State.OFF : State.LONG;  }
 
-    // NEW: convenience for Autonomous
+    // Convenience for Autonomous
     public void setCloseAuto() { state = State.CLOSE_AUTO; }
 
     public void stop() {
@@ -135,11 +156,13 @@ public class Flywheel {
         targetTps = 0.0;
         iRight = iLeft = 0;
         prevErrRight = prevErrLeft = 0;
+
         if (right != null) right.setPower(0.0);
         if (left  != null) left.setPower(0.0);
 
-        // Hood should NOT move during INIT, so only command it if enabled
-        if (hoodEnabled) setHoodPosition(hoodClosePos);
+        // Hood should NOT move during INIT, so only command it if enabled.
+        // In OFF, hood should sit at START.
+        if (hoodEnabled) setHoodPosition(hoodStartPos);
     }
 
     // --- Hood config helpers ---
@@ -148,8 +171,17 @@ public class Flywheel {
         hoodLongPos  = clamp(longPos, 0.0, 1.0);
     }
 
+    public void setHoodStartPos(double startPos) {
+        hoodStartPos = clamp(startPos, 0.0, 1.0);
+    }
+
     public double getHoodPosition() {
         return (hood != null) ? hood.getPosition() : Double.NaN;
+    }
+
+    // Optional: helpful for telemetry
+    public double getBatteryVoltage() {
+        return getBatteryVoltageInternal();
     }
 
     // --- Tuning helpers ---
@@ -168,15 +200,27 @@ public class Flywheel {
         switch (state) {
             case CLOSE:      targetFlywheelRpm = CLOSE_FLYWHEEL_RPM;      break;
             case LONG:       targetFlywheelRpm = LONG_FLYWHEEL_RPM;       break;
-            case CLOSE_AUTO: targetFlywheelRpm = CLOSE_AUTO_FLYWHEEL_RPM; break; // NEW
+            case CLOSE_AUTO: targetFlywheelRpm = CLOSE_AUTO_FLYWHEEL_RPM; break;
             default:         targetFlywheelRpm = 0.0;                     break;
         }
 
         // 1b) Hood follows state ONLY after enabled (after Play)
-        // CLOSE_AUTO uses the CLOSE hood angle.
         if (hoodEnabled) {
-            if (state == State.LONG) setHoodPosition(hoodLongPos);
-            else                     setHoodPosition(hoodClosePos);
+            switch (state) {
+                case LONG:
+                    setHoodPosition(hoodLongPos);
+                    break;
+
+                case CLOSE:
+                case CLOSE_AUTO:
+                    setHoodPosition(hoodClosePos);
+                    break;
+
+                case OFF:
+                default:
+                    setHoodPosition(hoodStartPos);
+                    break;
+            }
         }
 
         targetTps = rpmToTps(targetFlywheelRpm);
@@ -192,11 +236,15 @@ public class Flywheel {
             iRight = iLeft = 0;
             prevErrRight = prevErrLeft = 0;
         } else {
+            // Voltage compensation factor (higher when battery is low)
+            double vBatt = getBatteryVoltageInternal();
+            double vComp = NOMINAL_VOLTAGE / vBatt;
+
             // Right
             double errR = targetTps - rightTps;
             iRight = clamp(iRight + errR * dtSec, I_MIN, I_MAX);
             double dRight = (errR - prevErrRight) / Math.max(dtSec, 1e-4);
-            double ffRight = kF * targetTps * rightFFScale;
+            double ffRight = (kF * targetTps * rightFFScale) * vComp;
             pwrRight = clamp(ffRight + kP * errR + kI * iRight + kD * dRight, PWR_MIN, PWR_MAX);
             prevErrRight = errR;
 
@@ -204,7 +252,7 @@ public class Flywheel {
             double errL = targetTps - leftTps;
             iLeft = clamp(iLeft + errL * dtSec, I_MIN, I_MAX);
             double dLeft = (errL - prevErrLeft) / Math.max(dtSec, 1e-4);
-            double ffLeft = kF * targetTps * leftFFScale;
+            double ffLeft = (kF * targetTps * leftFFScale) * vComp;
             pwrLeft = clamp(ffLeft + kP * errL + kI * iLeft + kD * dLeft, PWR_MIN, PWR_MAX);
             prevErrLeft = errL;
         }
@@ -233,6 +281,14 @@ public class Flywheel {
         int dTicks = pos - last;
         if (isRight) lastPosRight = pos; else lastPosLeft = pos;
         return dTicks / Math.max(dt, 1e-4);
+    }
+
+    private double getBatteryVoltageInternal() {
+        if (battery == null) return NOMINAL_VOLTAGE;
+        double v = battery.getVoltage();
+        // guard against weird readings
+        if (v < 7.0 || v > 20.0) return NOMINAL_VOLTAGE;
+        return v;
     }
 
     private void setHoodPosition(double pos) {

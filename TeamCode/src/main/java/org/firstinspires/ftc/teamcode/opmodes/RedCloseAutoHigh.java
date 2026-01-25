@@ -51,17 +51,17 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(97, 105, Math.toRadians(32.0));
 
-    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(96.568, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_P11_POSE      = new Pose(105.166, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_P12_POSE      = new Pose(109.957, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_G11_POSE      = new Pose(116.976, 86.477, Math.toRadians(0.0));
+    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(96.568, 87.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_P11_POSE      = new Pose(105.166, 87.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_P12_POSE      = new Pose(109.957, 87.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_G11_POSE      = new Pose(116.976, 87.477, Math.toRadians(0.0));
 
     private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(97, 105, Math.toRadians(40));
 
-    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(96.306, 62.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_P21_POSE      = new Pose(103.973, 62.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_G21_POSE      = new Pose(109.378, 62.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_P22_POSE      = new Pose(116.590, 62.928, Math.toRadians(0.0));
+    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(96.306, 64.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_P21_POSE      = new Pose(102.973, 64.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_G21_POSE      = new Pose(108.378, 64.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_P22_POSE      = new Pose(116.590, 64.928, Math.toRadians(0.0));
 
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(97, 105, Math.toRadians(35.0));
 

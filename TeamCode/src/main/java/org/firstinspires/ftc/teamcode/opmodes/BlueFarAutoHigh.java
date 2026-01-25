@@ -42,16 +42,17 @@ public class BlueFarAutoHigh extends LinearOpMode {
     // ===== Intake settle timing =====
     private static final double INTAKE_SETTLE_S = 0.65;
 
+    // ===== Hood positions (match TeleOp defaults) =====
+    private static final double HOOD_CLOSE_POS = 0.15;
+    private static final double HOOD_LONG_POS  = 0.40;
+
     // ===== Field Poses (inches, radians) – BLUE FAR =====
-    // Start pose
     private static final Pose START_POSE = new Pose(
             61.58, 9.65, Math.toRadians(90.0));
 
-    // Launch preloads pose
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(
             59.07, 20.06, Math.toRadians(118.0));
 
-    // Row 1 intake line
     private static final Pose ALIGN_INTAKE1_POSE = new Pose(
             48.50, 34.517, Math.toRadians(180.0));
     private static final Pose INTAKE_P11_POSE = new Pose(
@@ -61,11 +62,9 @@ public class BlueFarAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_G11_POSE = new Pose(
             27.793, 34.517, Math.toRadians(180.0));
 
-    // Launch pose for first row
     private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(
-            53.07, 21.06, Math.toRadians(106.0));   // tune on-field if needed
+            53.07, 21.06, Math.toRadians(106.0));
 
-    // Row 2 intake line
     private static final Pose ALIGN_INTAKE2_POSE = new Pose(
             50.50, 58.465, Math.toRadians(180.0));
     private static final Pose INTAKE_P21_POSE = new Pose(
@@ -75,11 +74,9 @@ public class BlueFarAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_P22_POSE = new Pose(
             27.137, 58.465, Math.toRadians(180.0));
 
-    // Launch pose for second row
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(
-            54.07, 21.06, Math.toRadians(105.0));  // tune separately if needed
+            54.07, 21.06, Math.toRadians(105.0));
 
-    // Final park
     private static final Pose PARK_POSE = new Pose(
             38.079, 14.444, Math.toRadians(90.0));
 
@@ -120,9 +117,8 @@ public class BlueFarAutoHigh extends LinearOpMode {
     private double spinupElapsedS = 0.0;
 
     // Which tag pattern we ended up using (frozen at START)
-    // ✅ UPDATED: default fallback is PPG from the beginning
     private int tidToUse = TID_PPG;
-    private boolean usedFallbackPPG = true; // will flip false if we see a valid tag
+    private boolean usedFallbackPPG = true;
 
     // Launch trigger guards
     private boolean launchPreloadsStarted = false;
@@ -176,12 +172,10 @@ public class BlueFarAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();   // Auto owns the encoder zero
 
-        // (Optional) If you want intake-advance slightly softer/different than defaults:
-        // indexer.setIntakeAdvancePower(0.42);
-        // indexer.setIntakeAdvanceSettleDelay(0.20);
-
-        flywheel = new Flywheel("flywheelRight", "flywheelLeft");
+        // Flywheel + Hood servo (UPDATED)
+        flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
+        flywheel.setHoodPositions(HOOD_CLOSE_POS, HOOD_LONG_POS);
 
         intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
@@ -226,14 +220,12 @@ public class BlueFarAutoHigh extends LinearOpMode {
                 lastPipeSwapNs = nowNs;
             }
 
-            // "Last seen wins" (but fallback stays PPG if nothing valid is ever seen)
+            // "Last seen wins"
             if (llVision.hasTarget()) {
                 int tid = llVision.getTid();
                 if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
                     detectedTid = tid;
                     tidToUse = tid;
-                    usedFallbackPPG = (tidToUse == TID_PPG); // if we saw PPG that’s not really “fallback”
-                    // Better: treat "fallback" as "never saw any valid tag":
                     usedFallbackPPG = false;
                 }
             }
@@ -253,14 +245,16 @@ public class BlueFarAutoHigh extends LinearOpMode {
         // ===== RUN =====
         if (isStopRequested()) return;
 
+        // Enable hood movement AFTER START (UPDATED)
+        flywheel.enableHoodControl(true);
+
         long lastNs = System.nanoTime();
 
-        // ✅ UPDATED: True fallback flag only if we NEVER saw a valid tag in init
+        // True fallback flag only if we NEVER saw a valid tag in init
         if (detectedTid == -1) {
             tidToUse = TID_PPG;
             usedFallbackPPG = true;
         } else {
-            // tidToUse already set to last seen valid tid
             usedFallbackPPG = false;
         }
 
@@ -268,7 +262,7 @@ public class BlueFarAutoHigh extends LinearOpMode {
         preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
         preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
-        // FAR program -> LONG speed
+        // FAR program -> LONG speed (hood will go to long position)
         flywheel.setState(Flywheel.State.LONG);
 
         // Go directly to launch preloads pose
@@ -288,7 +282,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
             switch (phase) {
                 // --- Launch preloads ---
                 case DRIVE_LAUNCH_PRELOADS: {
-                    // ✅ UPDATED: gentle pre-advance
                     if (preAdvanceRemainingPreloads > 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
@@ -297,7 +290,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
                         preAdvanceRemainingPreloads--;
                     }
 
-                    // ✅ UPDATED: gate on !isPreAdvancing()
                     if (!follower.isBusy()
                             && preAdvanceRemainingPreloads == 0
                             && !indexer.isMoving()
@@ -359,7 +351,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -393,7 +384,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -435,7 +425,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 1 ---
                 case DRIVE_LAUNCH_FIRST_ROW: {
-                    // ✅ UPDATED: gentle pre-advance
                     if (preAdvanceRemainingRow1 > 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
@@ -505,7 +494,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -539,7 +527,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // ✅ UPDATED: gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -581,7 +568,6 @@ public class BlueFarAutoHigh extends LinearOpMode {
 
                 // --- Launch Row 2 ---
                 case DRIVE_LAUNCH_SECOND_ROW: {
-                    // ✅ UPDATED: gentle pre-advance
                     if (preAdvanceRemainingRow2 > 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
@@ -639,19 +625,26 @@ public class BlueFarAutoHigh extends LinearOpMode {
             telemetry.addData("Detected TID (INIT)", detectedTid);
             telemetry.addData("Using TID", tidToUse);
             telemetry.addData("Fallback PPG?", usedFallbackPPG);
+
             telemetry.addData("Preloads pre-adv rem", preAdvanceRemainingPreloads);
             telemetry.addData("Row1 pre-adv rem", preAdvanceRemainingRow1);
             telemetry.addData("Row2 pre-adv rem", preAdvanceRemainingRow2);
+
             telemetry.addData("FW Target RPM", "%.0f", flywheel.getTargetRpm());
             telemetry.addData("FW Right RPM", "%.0f", flywheel.getMeasuredRightRpm());
             telemetry.addData("FW Left RPM", "%.0f", flywheel.getMeasuredLeftRpm());
             telemetry.addData("Spinup Elapsed (s)", "%.2f", spinupElapsedS);
+
+            telemetry.addData("Hood pos", "%.2f", flywheel.getHoodPosition());
+
             telemetry.addData("Indexer Auto", indexer.isAutoRunning());
             telemetry.addData("Indexer Moving", indexer.isMoving());
             telemetry.addData("Indexer PreAdv", indexer.isPreAdvancing());
             telemetry.addData("Indexer IntakeAdv", indexer.isIntakeAdvancing());
+
             telemetry.addData("Intake Active", intakeActive);
             telemetry.addData("Intake Settle (s)", "%.2f", intakeSettleTimerS);
+
             telemetry.addData("Pose", poseStr(follower.getPose()));
             telemetry.update();
         }
@@ -790,3 +783,4 @@ public class BlueFarAutoHigh extends LinearOpMode {
         }
     }
 }
+

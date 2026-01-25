@@ -22,6 +22,15 @@ public class MecanumDriveModeNew extends OpMode {
     // Limit how high pipeline slot can go (adjust to your Limelight config)
     private static final int MAX_PIPE_SLOT = 9;
 
+    // ===== Heading lock tx setpoints =====
+    // Close shots aim dead-center (tx -> 0)
+    private static final double TX_SETPOINT_CLOSE = 0.0;
+    // Long shots:
+    //  - BLUE: aim 3° LEFT => tag appears 3° RIGHT => tx setpoint = +3
+    //  - RED : aim 3° RIGHT => tag appears 3° LEFT => tx setpoint = -3
+    private static final double TX_SETPOINT_BLUE_LONG = +2;
+    private static final double TX_SETPOINT_RED_LONG  = -2;
+
     private Limelight3A limelight;
     private LimelightVisionFtc llVision;
     private HeadingLockController lockCtrl;
@@ -46,6 +55,8 @@ public class MecanumDriveModeNew extends OpMode {
     private boolean prevLB2 = false; // manual advance
     private boolean prevRB2 = false; // manual cam
     private boolean prevB2  = false; // auto-launch trigger
+    private boolean jogMode = false;
+    private boolean prevPS2 = false;
 
     private Flywheel flywheel;
     private boolean prevUp2 = false, prevDown2 = false;
@@ -67,6 +78,7 @@ public class MecanumDriveModeNew extends OpMode {
         HeadingLockController.Config cfg = new HeadingLockController.Config();
         lockCtrl = new HeadingLockController(llVision, null, cfg);
         lockCtrl.setDesiredTid(selectedTid);
+        lockCtrl.setDesiredTxDeg(TX_SETPOINT_CLOSE); // start centered
 
         lastNs = System.nanoTime();
 
@@ -87,10 +99,12 @@ public class MecanumDriveModeNew extends OpMode {
         indexer.init(hardwareMap);
         indexer.setStepDelay(0.15);
 
-        // --------- Flywheel + Hood Servo (NEW) ---------
+        // --------- Flywheel + Hood Servo ---------
+        // NOTE: OpMode config only. Actual hood motion is owned by Flywheel class.
         flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
-        flywheel.setHoodPositions(0.15, 0.5); // close, long (starting values)
+        flywheel.setHoodStartPos(0.00);         // <-- tune this
+        flywheel.setHoodPositions(0.15, 0.40);  // close, long (tune these)
 
         telemetry.addLine("[G1] LB=Hold Align, RB=Toggle Goal (BLUE↔RED)");
         telemetry.addLine("[G1] DPad L/R = change pipeline for SELECTED goal (wrap 0..9)");
@@ -99,7 +113,8 @@ public class MecanumDriveModeNew extends OpMode {
         telemetry.addLine("Auto:    GP2 B  = auto launch 3 balls (requires flywheel running).");
         telemetry.addLine("Intake:  GP2 Y = FORWARD while held, GP2 A = REVERSE while held.");
         telemetry.addLine("Flywheel (GP2): Dpad Up = CLOSE (toggle), Dpad Down = LONG (toggle).");
-        telemetry.addLine("Hood: follows Flywheel state (Close=0.0, Long=0.5).");
+        telemetry.addLine("Heading lock: CLOSE aims tx=0. LONG aims tx=+3(BLUE) / -3(RED).");
+        telemetry.addLine("Hood: owned by Flywheel (Start on Play, then Close/Long based on state).");
     }
 
     /** Allow pipeline slot edits during TeleOp INIT (before start). */
@@ -108,8 +123,13 @@ public class MecanumDriveModeNew extends OpMode {
         llVision.poll();
         handleAlliancePipelineControls();
         pushVisionConfig();
+
+        // Keep tx setpoint consistent even in init_loop (optional but nice)
+        updateHeadingTxSetpoint();
+
         showTelemetryBasics(false);
         telemetry.addData("Hood pos", "%.2f", flywheel.getHoodPosition());
+        telemetry.addData("Tx Setpoint", "%.1f", lockCtrl.getDesiredTxDeg());
         telemetry.update();
     }
 
@@ -117,6 +137,9 @@ public class MecanumDriveModeNew extends OpMode {
     public void start() {
         // TeleOp has officially started — safe to home the cam once
         indexer.homeCam();
+        indexer.syncToNextPocketForward(true);  // forward-only snap to pocket center
+
+        // Allow hood motion AFTER Play. Flywheel will move hood to hoodStartPos immediately.
         flywheel.enableHoodControl(true);
     }
 
@@ -132,6 +155,17 @@ public class MecanumDriveModeNew extends OpMode {
         double dt = (now - lastNs) / 1e9;
         lastNs = now;
 
+        // ---------- FLYWHEEL (state toggles) ----------
+        boolean up2 = gamepad2.dpad_up;
+        boolean down2 = gamepad2.dpad_down;
+        if (up2 && !prevUp2) flywheel.toggleClose();
+        if (down2 && !prevDown2) flywheel.toggleLong();
+        prevUp2 = up2;
+        prevDown2 = down2;
+
+        // Set heading lock tx target based on alliance + flywheel state
+        updateHeadingTxSetpoint();
+
         // ---------- MECANUM DRIVE (robot-centric) ----------
         double forward = -gamepad1.right_stick_y;
         double right   =  gamepad1.right_stick_x;
@@ -142,15 +176,7 @@ public class MecanumDriveModeNew extends OpMode {
 
         drive.drive(forward, right, omega);
 
-        // ---------- FLYWHEEL ----------
-        boolean up2 = gamepad2.dpad_up;
-        boolean down2 = gamepad2.dpad_down;
-        if (up2 && !prevUp2) flywheel.toggleClose(); // hood follows
-        if (down2 && !prevDown2) flywheel.toggleLong(); // hood follows
-        prevUp2 = up2;
-        prevDown2 = down2;
-
-        // update flywheel (and hood) every loop
+        // Update flywheel (and hood) every loop
         flywheel.update(dt);
 
         // Is launcher "running" (has a nonzero target)?
@@ -163,6 +189,21 @@ public class MecanumDriveModeNew extends OpMode {
         intakeMotor.setPower(intakePower);
 
         // ---------- INDEXER ----------
+        boolean ps2 = gamepad2.ps;
+        if (ps2 && !prevPS2) {
+            jogMode = !jogMode;
+            if (jogMode) indexer.enterJogMode();
+            else         indexer.exitJogMode(true); // reset encoder on exit
+        }
+        prevPS2 = ps2;
+
+        if (jogMode) {
+            indexer.jog(gamepad2.left_stick_x);
+            telemetry.addLine("INDEXER JOG MODE: stick X to jog, PS to exit+reset");
+            telemetry.update();
+            return; // block normal indexer actions while jogging
+        }
+
         boolean b2 = gamepad2.b;
         // Auto 3-ball launch ONLY if flywheel is running and indexer is free
         if (b2 && !prevB2
@@ -190,11 +231,12 @@ public class MecanumDriveModeNew extends OpMode {
         }
         prevRB2 = rb2;
 
-        // keep indexer state machine updated
+        // Keep indexer state machine updated
         indexer.update(dt);
 
         // ---------- TELEMETRY ----------
         showTelemetryBasics(true);
+        telemetry.addData("Tx Setpoint", "%.1f", lockCtrl.getDesiredTxDeg());
         telemetry.addData("Hood pos", "%.2f", flywheel.getHoodPosition());
         telemetry.addData("Intake power", "%.1f", intakePower);
         telemetry.addData("Indexer moving", indexer.isMoving());
@@ -206,6 +248,18 @@ public class MecanumDriveModeNew extends OpMode {
     }
 
     // ================= Helpers =================
+
+    /** Set heading lock target tx based on alliance + flywheel state. */
+    private void updateHeadingTxSetpoint() {
+        boolean isBlue = (selectedTid == BLUE_GOAL_TID);
+        boolean isLong = (flywheel.getState() == Flywheel.State.LONG);
+
+        double txSetpoint = TX_SETPOINT_CLOSE;
+        if (isLong) {
+            txSetpoint = isBlue ? TX_SETPOINT_BLUE_LONG : TX_SETPOINT_RED_LONG;
+        }
+        lockCtrl.setDesiredTxDeg(txSetpoint);
+    }
 
     /** Handle G1 inputs that change alliance or pipeline slot (works in init_loop and loop). */
     private void handleAlliancePipelineControls() {
@@ -277,6 +331,8 @@ public class MecanumDriveModeNew extends OpMode {
         }
     }
 }
+
+
 
 
 
