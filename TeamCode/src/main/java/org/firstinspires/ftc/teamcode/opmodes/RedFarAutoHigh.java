@@ -1,4 +1,5 @@
 package org.firstinspires.ftc.teamcode.opmodes;
+import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
 
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -647,6 +648,7 @@ public class RedFarAutoHigh extends LinearOpMode {
         intakeStop();
         indexer.setCamOpen(false);
         flywheel.stop();
+        PoseStorage.lastPose = follower.getPose();
     }
 
     // ===== Drive power helpers =====
