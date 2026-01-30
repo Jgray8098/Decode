@@ -37,8 +37,8 @@ public class AutoPathTele extends OpMode {
     // ===== AUTO-NAV TARGETS ===
     // =========================
     // Pedro coords (inches, heading radians)
-    private static final Pose FAR_LAUNCH_RED_POSE  = new Pose(88, 20, Math.toRadians(68));
-    private static final Pose FAR_LAUNCH_BLUE_POSE = new Pose(63, 31, Math.toRadians(106));
+    private static final Pose FAR_LAUNCH_RED_POSE  = new Pose(75, 39, Math.toRadians(68));
+    private static final Pose FAR_LAUNCH_BLUE_POSE = new Pose(63, 30, Math.toRadians(106));
 
     // Cancel auto-nav if driver moves sticks beyond this
     private static final double CANCEL_STICK_THRESH = 0.12;
@@ -446,4 +446,3 @@ public class AutoPathTele extends OpMode {
         }
     }
 }
-
