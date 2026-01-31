@@ -53,9 +53,9 @@ public class Flywheel {
     private static final double MOTOR_MAX_TPS       = (MOTOR_MAX_RPM * MOTOR_TICKS_PER_REV) / 60.0;
 
     // ---- Target flywheel speeds (RPM) ----
-    private static final double CLOSE_FLYWHEEL_RPM      = 1400.0;
+    private static final double CLOSE_FLYWHEEL_RPM      = 1450.0;
     private static final double LONG_FLYWHEEL_RPM       = 1800.0;
-    private static final double CLOSE_AUTO_FLYWHEEL_RPM = 1275.0;
+    private static final double CLOSE_AUTO_FLYWHEEL_RPM = 1375.0;
 
     // --- Custom PIDF (on ticks/sec) ---
     private double kP = 0.003;
