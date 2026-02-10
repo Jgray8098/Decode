@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.opmodes;
 import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
+import org.firstinspires.ftc.teamcode.control.MotifStorage;
 
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -208,6 +209,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
         // Reset runtime state (fallback is PPG unless overwritten)
         tidToUse = TID_PPG;
+        MotifStorage.motifTid = tidToUse;
         detectedTid = -1;
 
         flywheel.setState(Flywheel.State.CLOSE_AUTO);
@@ -254,6 +256,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             detectedTid = tid;
                             tidToUse = tid;
 
+                            MotifStorage.motifTid = tidToUse;
+
                             preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
                             preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
@@ -265,6 +269,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     }
 
                     if (detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
+
+                        MotifStorage.motifTid = tidToUse;
                         preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
                         preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 

@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.rev.RevColorSensorV3;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
@@ -17,6 +18,10 @@ import org.firstinspires.ftc.teamcode.vision.LimelightVisionFtc;
 import org.firstinspires.ftc.teamcode.mechanism.Indexer;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
+
+// NEW: artifact tracking + motif storage
+import org.firstinspires.ftc.teamcode.control.ArtifactTracker;
+import org.firstinspires.ftc.teamcode.control.MotifStorage;
 
 @TeleOp(name = "ColorSensorTele")
 public class ColorSensorTele extends OpMode {
@@ -65,10 +70,11 @@ public class ColorSensorTele extends OpMode {
     // Indexer
     private Indexer indexer;
     private boolean prevLB2 = false;
-    private boolean prevRB2 = false;
+    private boolean prevRB2 = false; // now used for AUTO-SORT
     private boolean prevB2  = false;
     private boolean jogMode = false;
     private boolean prevPS2 = false;
+    private boolean prevX2  = false; // now used for CAM TOGGLE
 
     private Flywheel flywheel;
     private boolean prevUp2 = false, prevDown2 = false;
@@ -86,6 +92,23 @@ public class ColorSensorTele extends OpMode {
     // Keep a guaranteed-non-null pose we can fall back to
     private Pose safePose = new Pose(0, 0, 0);
 
+    // =========================
+    // ===== ARTIFACT TRACKING ==
+    // =========================
+    private RevColorSensorV3 colorSensorFrontR, colorSensorBackR, colorSensorFrontL, colorSensorBackL;
+    private ArtifactTracker artifactTracker;
+
+    // When we run auto-launch (3 shots), we reset tracker to EMPTY after it finishes
+    private boolean resetAfterLaunchPending = false;
+    private boolean prevIndexerAutoRunning = false;
+
+    // When we advance one slot, rotate tracker AFTER the move completes
+    private boolean advancePending = false;
+
+    // Auto-sort state machine (RB2)
+    private boolean sortActive = false;
+    private int sortStepsRemaining = 0;
+
     @Override
     public void init() {
         drive.init(hardwareMap);
@@ -93,30 +116,25 @@ public class ColorSensorTele extends OpMode {
         // ---------- Pedro follower ----------
         follower = Constants.createFollower(hardwareMap);
 
-        // IMPORTANT:
-        // follower.getPose() can be NULL in INIT until a pose is explicitly pushed.
-        // So we set BOTH starting pose and current pose to a guaranteed non-null pose.
         Pose startPose = (PoseStorage.lastPose != null) ? PoseStorage.lastPose : new Pose(0, 0, 0);
         safePose = startPose;
 
         follower.setStartingPose(startPose);
-        follower.setPose(startPose);            // <<< prevents NPE in init_loop telemetry / path build
-        follower.startTeleopDrive();            // put follower in a safe state
-        follower.setTeleOpDrive(0, 0, 0, true); // ensure no output
+        follower.setPose(startPose);
+        follower.startTeleopDrive();
+        follower.setTeleOpDrive(0, 0, 0, true);
         follower.update();
 
         // ---------- Limelight ----------
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
         llVision = new LimelightVisionFtc(limelight);
 
-        // Default to BLUE goal
         selectedTid  = BLUE_GOAL_TID;
         selectedPipe = bluePipe;
         llVision.setPipeline(selectedPipe);
         llVision.setPreferredTid(selectedTid);
         llVision.start(100);
 
-        // Keep your original “good” controller + config usage
         HeadingLockController.Config cfg = new HeadingLockController.Config();
         lockCtrl = new HeadingLockController(llVision, null, cfg);
         lockCtrl.setDesiredTid(selectedTid);
@@ -127,7 +145,7 @@ public class ColorSensorTele extends OpMode {
         intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
 
-        // Indexer
+        // ---------- Indexer ----------
         indexer = new Indexer(
                 "Indexer",
                 "camServo",
@@ -141,31 +159,48 @@ public class ColorSensorTele extends OpMode {
         indexer.init(hardwareMap);
         indexer.setStepDelay(0.15);
 
-        // Flywheel
+        // ---------- Flywheel ----------
         flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
         flywheel.setHoodStartPos(0.00);
         flywheel.setHoodPositions(0.15, 0.40);
 
+        // ---------- Color Sensors + Artifact Tracker ----------
+        colorSensorFrontR = hardwareMap.get(RevColorSensorV3.class, "colorSensorFrontR");
+        colorSensorBackR  = hardwareMap.get(RevColorSensorV3.class, "colorSensorBackR");
+        colorSensorFrontL = hardwareMap.get(RevColorSensorV3.class, "colorSensorFrontL");
+        colorSensorBackL  = hardwareMap.get(RevColorSensorV3.class, "colorSensorBackL");
+
+        artifactTracker = new ArtifactTracker(
+                colorSensorFrontR, colorSensorBackR,
+                colorSensorFrontL, colorSensorBackL,
+                16,      // gain
+                0.06f,   // MIN_BRIGHTNESS_SUM
+                0.08f,   // BALL_PRESENT_SUM
+                -0.20f,  // PURPLE_SCORE_MAX
+                -0.05f   // GREEN_SCORE_MIN
+        );
+
         telemetry.addLine("[G1] LB=Hold Align, RB=Toggle Goal (BLUE↔RED)");
         telemetry.addLine("[G1] DPad L/R = change pipeline for SELECTED goal (wrap 0..9)");
         telemetry.addLine("[G1] Y = AUTO-NAV to FAR LAUNCH pose (cancel by moving sticks)");
         telemetry.addLine("[G1] B = Cancel AUTO-NAV");
-        telemetry.addLine("Manual driving uses your MecanumDrive ONLY. Pedro drives motors ONLY during auto-nav.");
+        telemetry.addLine("[G2] B = Auto launch 3 (after it completes, tracker assumes indexer EMPTY)");
+        telemetry.addLine("[G2] LB = Advance one slot (tracker rotates AFTER move completes)");
+        telemetry.addLine("[G2] RB = AUTO SORT (only if exactly 2 PURPLE + 1 GREEN and motif is 21/22/23)");
+        telemetry.addLine("[G2] X  = Cam toggle (moved from RB)");
+        telemetry.addData("MotifTid (from Auto)", MotifStorage.motifTid);
     }
 
     @Override
     public void init_loop() {
         llVision.poll();
 
-        // Manual mode during init_loop
         autoNavActive = false;
 
-        // Force Pedro output to zero BEFORE update (prevents any motor write surprises)
         follower.setTeleOpDrive(0, 0, 0, true);
         follower.update();
 
-        // Keep safe pose refreshed (but never assume non-null)
         Pose pNow = follower.getPose();
         if (pNow != null) safePose = pNow;
 
@@ -176,11 +211,11 @@ public class ColorSensorTele extends OpMode {
         showTelemetryBasics(false);
 
         Pose p = follower.getPose();
-        if (p == null) {
-            telemetry.addData("PedroPose", "NULL (waiting for follower pose)");
-        } else {
-            telemetry.addData("PedroPose", "(%.1f, %.1f, %.1f°)", p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
-        }
+        if (p == null) telemetry.addData("PedroPose", "NULL (waiting for follower pose)");
+        else telemetry.addData("PedroPose", "(%.1f, %.1f, %.1f°)", p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
+
+        telemetry.addData("MotifTid", MotifStorage.motifTid);
+        telemetry.addData("TrackingEnabled", artifactTracker.isTrackingEnabled());
         telemetry.update();
     }
 
@@ -190,12 +225,17 @@ public class ColorSensorTele extends OpMode {
         indexer.syncToNextPocketForward(true);
         flywheel.enableHoodControl(true);
 
-        // Hard stop drivetrain at start
         drive.drive(0, 0, 0);
 
-        // Ensure Pedro is not commanding anything when we begin
         follower.startTeleopDrive();
         follower.setTeleOpDrive(0, 0, 0, true);
+
+        // We do NOT assume empty at TeleOp start. We start tracking only after a launch completes.
+        resetAfterLaunchPending = false;
+        prevIndexerAutoRunning = indexer.isAutoRunning();
+        advancePending = false;
+        sortActive = false;
+        sortStepsRemaining = 0;
     }
 
     @Override
@@ -225,41 +265,26 @@ public class ColorSensorTele extends OpMode {
 
         // ---------- AUTO-NAV TRIGGER / CANCEL ----------
         boolean y1 = gamepad1.y;
-        if (y1 && !prevY1 && !autoNavActive) {
-            startAutoNavToFarLaunch();
-        }
+        if (y1 && !prevY1 && !autoNavActive) startAutoNavToFarLaunch();
         prevY1 = y1;
 
         boolean b1 = gamepad1.b;
-        if (autoNavActive && b1 && !prevB1) {
-            cancelAutoNav();
-        }
+        if (autoNavActive && b1 && !prevB1) cancelAutoNav();
         prevB1 = b1;
 
-        // Cancel if driver moves sticks
-        if (autoNavActive && driverIsCommandingSticks()) {
-            cancelAutoNav();
-        }
+        if (autoNavActive && driverIsCommandingSticks()) cancelAutoNav();
 
-        // ---------- PEDRO UPDATE (localization always; motor ownership depends on mode) ----------
-        if (!autoNavActive) {
-            // Force Pedro’s motor command to ZERO *before* update so it cannot fight mecanum drive
-            follower.setTeleOpDrive(0, 0, 0, true);
-        }
+        // ---------- PEDRO UPDATE ----------
+        if (!autoNavActive) follower.setTeleOpDrive(0, 0, 0, true);
         follower.update();
 
-        // Keep safe pose refreshed (but never assume non-null)
         Pose pNow = follower.getPose();
         if (pNow != null) safePose = pNow;
 
         // ---------- DRIVE CONTROL ----------
         if (autoNavActive) {
-            // Pedro owns motors while following
-            if (!follower.isBusy()) {
-                cancelAutoNav();
-            }
+            if (!follower.isBusy()) cancelAutoNav();
         } else {
-            // Manual drive owns motors (KNOWN-GOOD SIGNS — DO NOT CHANGE)
             double forward = -gamepad1.right_stick_y;
             double right   =  gamepad1.right_stick_x;
             double rotateDriver =  gamepad1.left_stick_x;
@@ -276,7 +301,7 @@ public class ColorSensorTele extends OpMode {
         else if (gamepad2.a) intakePower = -1.0;
         intakeMotor.setPower(intakePower);
 
-        // ---------- INDEXER ----------
+        // ---------- INDEXER: JOG MODE ----------
         boolean ps2 = gamepad2.ps;
         if (ps2 && !prevPS2) {
             jogMode = !jogMode;
@@ -292,25 +317,86 @@ public class ColorSensorTele extends OpMode {
             return;
         }
 
+        // ---------- CAM TOGGLE (moved from RB2 to X2) ----------
+        //boolean x2 = gamepad2.x;
+        //if (x2 && !prevX2 && !indexer.isAutoRunning()) {
+        //    indexer.setCamOpen(!indexer.isCamOpen());
+        //}
+        //prevX2 = x2;
+
+        // ---------- AUTO-LAUNCH (B2) ----------
         boolean b2 = gamepad2.b;
-        if (b2 && !prevB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving()) {
+        if (b2 && !prevB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving() && !sortActive) {
             indexer.startAutoLaunchAllThreeContinuous();
+            // After launch finishes, we assume empty and begin/continue tracking
+            resetAfterLaunchPending = true;
         }
         prevB2 = b2;
 
+        // ---------- MANUAL ADVANCE ONE SLOT (LB2) ----------
         boolean lb2 = gamepad2.left_bumper;
-        if (lb2 && !prevLB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving()) {
+        if (lb2 && !prevLB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving()
+                && !sortActive && !advancePending) {
             indexer.advanceOneSlot();
+            advancePending = true;
         }
         prevLB2 = lb2;
 
+        // ---------- AUTO SORT (RB2) ----------
         boolean rb2 = gamepad2.right_bumper;
-        if (rb2 && !prevRB2 && !indexer.isAutoRunning()) {
-            indexer.setCamOpen(!indexer.isCamOpen());
+        if (rb2 && !prevRB2 && !indexer.isAutoRunning() && !indexer.isMoving()
+                && !sortActive && !advancePending) {
+
+            // Only if tracking is enabled and exactly 2 PURPLE + 1 GREEN
+            if (artifactTracker.isTrackingEnabled()
+                    && artifactTracker.count(ArtifactTracker.Color.PURPLE) == 2
+                    && artifactTracker.count(ArtifactTracker.Color.GREEN) == 1) {
+
+                int motifTid = MotifStorage.motifTid; // 21=GPP, 22=PGP, 23=PPG
+                int steps = computeSortStepsForMotif(motifTid);
+                if (steps > 0) {
+                    sortActive = true;
+                    sortStepsRemaining = steps;
+                }
+                // steps==0 => already correct; steps==-1 => cannot match motif (or motif missing)
+            }
         }
         prevRB2 = rb2;
 
+        // ---------- INDEXER UPDATE ----------
         indexer.update(dt);
+
+        // ---------- Handle "advance completed" rotation (manual OR sort) ----------
+        if (advancePending && !indexer.isMoving()) {
+            artifactTracker.onAdvanceForward();
+            advancePending = false;
+        }
+
+        // ---------- Detect launch completion -> reset tracking to EMPTY ----------
+        boolean autoRunning = indexer.isAutoRunning();
+        if (prevIndexerAutoRunning && !autoRunning && resetAfterLaunchPending) {
+            artifactTracker.startTrackingEmpty();
+            resetAfterLaunchPending = false;
+            sortActive = false;
+            sortStepsRemaining = 0;
+            advancePending = false;
+        }
+        prevIndexerAutoRunning = autoRunning;
+
+        // ---------- AUTO SORT state machine (advance steps 1 at a time) ----------
+        if (sortActive) {
+            if (!indexer.isMoving() && !indexer.isAutoRunning() && !advancePending && sortStepsRemaining > 0) {
+                indexer.advanceOneSlot();
+                advancePending = true; // rotation happens when move completes
+                sortStepsRemaining--;
+            }
+            if (sortStepsRemaining == 0 && !indexer.isMoving() && !advancePending) {
+                sortActive = false;
+            }
+        }
+
+        // ---------- ARTIFACT TRACKER UPDATE ----------
+        artifactTracker.update();
 
         // ---------- TELEMETRY ----------
         showTelemetryBasics(true);
@@ -327,6 +413,18 @@ public class ColorSensorTele extends OpMode {
         telemetry.addData("AutoNav", autoNavActive);
         if (autoNavActive) telemetry.addData("Follower busy", follower.isBusy());
 
+        telemetry.addData("MotifTid", MotifStorage.motifTid);
+        telemetry.addData("TrackingEnabled", artifactTracker.isTrackingEnabled());
+        telemetry.addData("Slots (1,2,3)", "%s %s %s",
+                artifactTracker.getSlot(1), artifactTracker.getSlot(2), artifactTracker.getSlot(3));
+        telemetry.addData("Counts (G,P,E,U)", "%d %d %d %d",
+                artifactTracker.count(ArtifactTracker.Color.GREEN),
+                artifactTracker.count(ArtifactTracker.Color.PURPLE),
+                artifactTracker.count(ArtifactTracker.Color.EMPTY),
+                artifactTracker.count(ArtifactTracker.Color.UNKNOWN));
+        telemetry.addData("SortActive", sortActive);
+        telemetry.addData("SortStepsRemaining", sortStepsRemaining);
+
         telemetry.update();
     }
 
@@ -335,13 +433,10 @@ public class ColorSensorTele extends OpMode {
     private void startAutoNavToFarLaunch() {
         Pose target = (selectedTid == RED_GOAL_TID) ? FAR_LAUNCH_RED_POSE : FAR_LAUNCH_BLUE_POSE;
 
-        // Stop manual drive first
         drive.drive(0, 0, 0);
 
-        // Put Pedro in a known state when taking over
         follower.startTeleopDrive();
 
-        // NEVER trust follower.getPose() to be non-null; use safePose fallback.
         Pose cur = follower.getPose();
         if (cur == null) cur = safePose;
 
@@ -358,18 +453,64 @@ public class ColorSensorTele extends OpMode {
         autoNavActive = false;
         autoNavPath = null;
 
-        // Stop Pedro and give motor control back to manual cleanly
         follower.startTeleopDrive();
         follower.setTeleOpDrive(0, 0, 0, true);
         drive.drive(0, 0, 0);
     }
 
     private boolean driverIsCommandingSticks() {
-        // Cancel based on known-good stick mapping
         double f = Math.abs(-gamepad1.right_stick_y);
         double s = Math.abs( gamepad1.right_stick_x);
         double r = Math.abs( gamepad1.left_stick_x);
         return (f > CANCEL_STICK_THRESH) || (s > CANCEL_STICK_THRESH) || (r > CANCEL_STICK_THRESH);
+    }
+
+    // ================= SORT HELPERS =================
+
+    private ArtifactTracker.Color[] desiredForMotif(int tid) {
+        // Desired LAUNCH ORDER (assumed): [slot3, slot1, slot2]
+        // 21=GPP, 22=PGP, 23=PPG
+        if (tid == 21) return new ArtifactTracker.Color[]{
+                ArtifactTracker.Color.GREEN, ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.PURPLE
+        };
+        if (tid == 22) return new ArtifactTracker.Color[]{
+                ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.GREEN, ArtifactTracker.Color.PURPLE
+        };
+        if (tid == 23) return new ArtifactTracker.Color[]{
+                ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.GREEN
+        };
+        return null;
+    }
+
+    private ArtifactTracker.Color[] launchOrderAfterSteps(int steps) {
+        ArtifactTracker.Color s1 = artifactTracker.getSlot(1);
+        ArtifactTracker.Color s2 = artifactTracker.getSlot(2);
+        ArtifactTracker.Color s3 = artifactTracker.getSlot(3);
+
+        for (int i = 0; i < steps; i++) {
+            ArtifactTracker.Color old1 = s1, old2 = s2, old3 = s3;
+            s1 = old3;
+            s2 = old1;
+            s3 = old2;
+        }
+
+        // Launch order assumed: slot3 then slot1 then slot2
+        return new ArtifactTracker.Color[]{ s3, s1, s2 };
+    }
+
+    private int computeSortStepsForMotif(int motifTid) {
+        ArtifactTracker.Color[] desired = desiredForMotif(motifTid);
+        if (desired == null) return -1;
+
+        for (int k = 0; k < 3; k++) {
+            ArtifactTracker.Color[] order = launchOrderAfterSteps(k);
+            boolean exact =
+                    order[0] == desired[0] &&
+                            order[1] == desired[1] &&
+                            order[2] == desired[2];
+            if (exact) return k;
+        }
+        return -1;
     }
 
     // ================= Helpers =================
@@ -446,4 +587,3 @@ public class ColorSensorTele extends OpMode {
         }
     }
 }
-

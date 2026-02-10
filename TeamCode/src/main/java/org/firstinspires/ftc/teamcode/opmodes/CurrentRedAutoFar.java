@@ -64,7 +64,7 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
     // Intake1 -> Launch First Row
     private static final double H_ROW1_RETURN_START_DEG        = 0;
-    private static final double H_ROW1_RETURN_END_DEG          = 68;
+    private static final double H_ROW1_RETURN_END_DEG          = 70;
 
     // Park (now from Launch First Row, because it is the LAST launch after swapping)
     private static final double H_PARK_START_DEG               = 70;
