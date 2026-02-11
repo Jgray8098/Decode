@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.opmodes;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
+import org.firstinspires.ftc.teamcode.control.MotifStorage;
 
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -238,6 +239,8 @@ public class CurrentRedAutoFar extends LinearOpMode {
                     detectedTid = tid;
                     tidToUse = tid;
                     usedFallbackPPG = false;
+
+                    MotifStorage.motifTid = tidToUse;
                 }
             }
 
@@ -266,6 +269,8 @@ public class CurrentRedAutoFar extends LinearOpMode {
         } else {
             usedFallbackPPG = false;
         }
+
+        MotifStorage.motifTid = tidToUse;
 
         // Compute pre-advance counts
         preAdvanceRemainingPreloads = computePreAdvancePreloads(tidToUse);

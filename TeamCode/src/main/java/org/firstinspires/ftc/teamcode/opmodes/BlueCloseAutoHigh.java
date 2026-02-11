@@ -1,4 +1,5 @@
 package org.firstinspires.ftc.teamcode.opmodes;
+
 import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
 import org.firstinspires.ftc.teamcode.control.MotifStorage;
 
@@ -46,6 +47,12 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
     // Tag detect timeout so we never get stuck
     private static final double TAG_DETECT_TIMEOUT_S = 1.25; // tweak 0.8–1.5
+    private static final long   PIPE_SWAP_PERIOD_MS  = 50;
+
+    // ===== NEW: HOOD positions (same idea as your FAR autos) =====
+    // Use your TeleOp close-zone values here
+    private static final double HOOD_CLOSE_POS = 0.15;
+    private static final double HOOD_LONG_POS  = 0.40; // not used in this auto, but Flywheel expects both in your FAR code
 
     // ===== Field Poses (inches, radians) =====
     private static final Pose START_POSE = new Pose(20.461, 123.153, Math.toRadians(54));
@@ -64,8 +71,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_G11_POSE      = new Pose(27.024, 86.477, Math.toRadians(180));
 
     // Launch pose for first row
-    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(
-            51.046, 98.182, Math.toRadians(138));
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(51.046, 98.182, Math.toRadians(138));
 
     // Row 2 intake line
     private static final Pose ALIGN_INTAKE2_POSE   = new Pose(46.694, 62.928, Math.toRadians(180));
@@ -74,8 +80,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 62.928, Math.toRadians(180));
 
     // Launch pose for second row
-    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(
-            52.046, 98.182, Math.toRadians(142));
+    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(52.046, 98.182, Math.toRadians(142));
 
     // Final park
     private static final Pose PARK_POSE = new Pose(30.568, 75.475, Math.toRadians(180));
@@ -177,12 +182,11 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();
 
-        // Optional tuning (if you want intake-advance slightly softer than pre-advance):
-        // indexer.setIntakeAdvancePower(0.42);
-        // indexer.setIntakeAdvanceSettleDelay(0.20);
-
-        flywheel = new Flywheel("flywheelRight", "flywheelLeft");
+        // ✅ UPDATED: include hood servo + enable hood control (TeleOp close-zone behavior)
+        flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
+        flywheel.setHoodPositions(HOOD_CLOSE_POS, HOOD_LONG_POS);
+        flywheel.enableHoodControl(true);
 
         intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
@@ -195,11 +199,13 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
         setDrivePowerNormal();
 
-        telemetry.addLine("BlueCloseAutoHigh: Ready.");
+        telemetry.addLine("BlueCloseAutoHigh: Ready (hood+RPM close-zone enabled).");
         telemetry.addData("Fallback Pattern", "PPG (TID 23)");
+        telemetry.addData("Hood Close Pos", "%.2f", HOOD_CLOSE_POS);
         telemetry.update();
 
         while (!isStarted() && !isStopRequested()) {
+            telemetry.addData("Hood pos (init)", "%.2f", safeHoodPos());
             telemetry.update();
             sleep(30);
         }
@@ -212,7 +218,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         MotifStorage.motifTid = tidToUse;
         detectedTid = -1;
 
-        flywheel.setState(Flywheel.State.CLOSE_AUTO);
+        // ✅ Set Close-zone state (this should match your TeleOp close zone)
+        flywheel.setState(Flywheel.State.CLOSE);
 
         follower.followPath(paths.AprilTagPosition, true);
         phase = Phase.DRIVE_APRILTAG_POSITION;
@@ -242,7 +249,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     detectTagElapsedS += dt;
 
                     long now = System.nanoTime();
-                    if ((now - lastPipeSwapNs) / 1e6 > 50) {
+                    if ((now - lastPipeSwapNs) / 1e6 > PIPE_SWAP_PERIOD_MS) {
                         activePipeline = (activePipeline == PIPE_OBELISK_1)
                                 ? PIPE_OBELISK_2
                                 : (activePipeline == PIPE_OBELISK_2 ? PIPE_OBELISK_3 : PIPE_OBELISK_1);
@@ -250,27 +257,22 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                         lastPipeSwapNs = now;
                     }
 
+                    // "Last seen wins" during detect window, BUT we still time out
                     if (llVision.hasTarget()) {
                         int tid = llVision.getTid();
                         if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
                             detectedTid = tid;
                             tidToUse = tid;
-
-                            MotifStorage.motifTid = tidToUse;
-
-                            preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
-                            preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
-
-                            setDrivePowerNormal();
-                            follower.followPath(paths.LaunchPreloads, true);
-                            phase = Phase.DRIVE_LAUNCH_PRELOADS;
-                            break;
                         }
                     }
 
-                    if (detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
+                    // Continue if we saw a tag OR timed out
+                    if (detectedTid != -1 || detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
+                        // fallback remains PPG if no tag
+                        if (detectedTid == -1) tidToUse = TID_PPG;
 
                         MotifStorage.motifTid = tidToUse;
+
                         preAdvanceTotalPreloads     = computePreAdvancePreloads(tidToUse);
                         preAdvanceRemainingPreloads = preAdvanceTotalPreloads;
 
@@ -296,7 +298,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isAutoRunning()
                             && !indexer.isPreAdvancing()) {
                         spinupElapsedS = 0.0;
-                        preloadSettleTimerS = 0.0;   // <-- start extra settle timer at pose
+                        preloadSettleTimerS = 0.0;   // start extra settle timer at pose
                         phase = Phase.ARRIVED_SPINUP_PRELOADS;
                     }
                     break;
@@ -355,7 +357,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // gentle intake advance (matches pre-advance behavior)
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -389,7 +390,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -498,7 +498,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -532,7 +531,6 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                             && !indexer.isMoving()
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
-                        // gentle intake advance
                         indexer.startIntakeAdvanceOneSlot();
                         settleAdvanceIssued = true;
                     }
@@ -632,9 +630,18 @@ public class BlueCloseAutoHigh extends LinearOpMode {
             telemetry.addData("Detected TID", detectedTid);
             telemetry.addData("Using Pattern (fallback=PPG)", tidToUse);
             telemetry.addData("TagDetectElapsed", "%.2f", detectTagElapsedS);
+
+            telemetry.addData("FW Target RPM", "%.0f", flywheel.getTargetRpm());
+            telemetry.addData("FW Right RPM", "%.0f", flywheel.getMeasuredRightRpm());
+            telemetry.addData("FW Left RPM", "%.0f", flywheel.getMeasuredLeftRpm());
+            telemetry.addData("Hood pos", "%.2f", safeHoodPos());
+
+            telemetry.addData("Spinup Elapsed (s)", "%.2f", spinupElapsedS);
+
             telemetry.addData("Preloads pre-adv rem", preAdvanceRemainingPreloads);
             telemetry.addData("Row1 pre-adv rem", preAdvanceRemainingRow1);
             telemetry.addData("Row2 pre-adv rem", preAdvanceRemainingRow2);
+
             telemetry.addData("Indexer moving", indexer.isMoving());
             telemetry.addData("Indexer preAdv", indexer.isPreAdvancing());
             telemetry.addData("Indexer intakeAdv", indexer.isIntakeAdvancing());
@@ -662,6 +669,12 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
     private void intakeStart() { intakeActive = true; intakeMotor.setPower(1.0); }
     private void intakeStop()  { intakeActive = false; intakeMotor.setPower(0.0); }
+
+    // Avoid crashing telemetry if your Flywheel class doesn’t expose hood position in some builds
+    private double safeHoodPos() {
+        try { return flywheel.getHoodPosition(); }
+        catch (Exception ignored) { return -1.0; }
+    }
 
     // Preloads mapping (unchanged): PPG → 0, PGP → 1, GPP → 2
     private int computePreAdvancePreloads(int tid) {
