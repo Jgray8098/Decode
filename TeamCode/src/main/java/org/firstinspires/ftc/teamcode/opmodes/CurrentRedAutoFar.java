@@ -18,7 +18,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Current Red Auto Far", group = "Comp")
+@Autonomous(name = "Red Far", group = "Comp")
 public class CurrentRedAutoFar extends LinearOpMode {
 
     // =========================================================
@@ -31,10 +31,10 @@ public class CurrentRedAutoFar extends LinearOpMode {
     private static final Pose LAUNCH_PRELOADS_POSE   = new Pose(84.848, 22.663, Math.toRadians(63));
 
     // Intake 1 sequence (SLOW)  ------------------------------------------------
-    private static final Pose ALIGN_INTAKE1_POSE     = new Pose(94, 38.517, Math.toRadians(0));
-    private static final Pose INTAKE_P11_POSE        = new Pose(106.796, 38.517, Math.toRadians(0));
-    private static final Pose INTAKE_P12_POSE        = new Pose(111.611, 38.517, Math.toRadians(0));
-    private static final Pose INTAKE_G11_POSE        = new Pose(116.207, 38.517, Math.toRadians(0));
+    private static final Pose ALIGN_INTAKE1_POSE     = new Pose(94, 34.0, Math.toRadians(0));
+    private static final Pose INTAKE_P11_POSE        = new Pose(106.796, 34.0, Math.toRadians(0));
+    private static final Pose INTAKE_P12_POSE        = new Pose(111.611, 34.0, Math.toRadians(0));
+    private static final Pose INTAKE_G11_POSE        = new Pose(116.207, 34.0, Math.toRadians(0));
     private static final Pose LAUNCH_FIRST_ROW_POSE  = new Pose(90, 21, Math.toRadians(68));
 
     // Intake 2 sequence (FAST/NORMAL) ------------------------------------------
@@ -65,10 +65,10 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
     // Intake1 -> Launch First Row
     private static final double H_ROW1_RETURN_START_DEG        = 0;
-    private static final double H_ROW1_RETURN_END_DEG          = 70;
+    private static final double H_ROW1_RETURN_END_DEG          = 71;
 
     // Park (now from Launch First Row, because it is the LAST launch after swapping)
-    private static final double H_PARK_START_DEG               = 70;
+    private static final double H_PARK_START_DEG               = 71;
     private static final double H_PARK_END_DEG                 = 90;
 
     // =========================================================
@@ -108,6 +108,12 @@ public class CurrentRedAutoFar extends LinearOpMode {
     private static final double INTAKE_SETTLE_S = 0.65;
 
     // =========================================================
+    // ============ NEW: REVERSE CLEANUP (NON-BLOCKING) =========
+    // =========================================================
+    private static final double OUTTAKE_REVERSE_TIME_S = 1.0;
+    private static final double OUTTAKE_REVERSE_POWER  = -1.0; // reverse
+
+    // =========================================================
     // ==================== DEVICES / STATE ====================
     // =========================================================
     private Limelight3A limelight;
@@ -131,6 +137,10 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
     // Intake control
     private boolean intakeActive = false;
+
+    // NEW: timed reverse cleanup (runs while driving back to launch)
+    private boolean outtakeReverseActive = false;
+    private double outtakeReverseTimerS = 0.0;
 
     // Intake settle timing
     private double intakeSettleTimerS = 0.0;
@@ -217,6 +227,7 @@ public class CurrentRedAutoFar extends LinearOpMode {
         telemetry.addData("Default Pattern", "PPG (TID 23) if no tag seen");
         telemetry.addData("Start Pose", poseStr(START_POSE));
         telemetry.addData("Intake2 Chassis Power (now first)", MAX_POWER_INTAKE2);
+        telemetry.addData("Reverse Cleanup", "Enabled (1.0s reverse while driving back to launch)");
         telemetry.update();
 
         // ===== INIT loop: scan until START =====
@@ -287,6 +298,9 @@ public class CurrentRedAutoFar extends LinearOpMode {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
 
+            // NEW: tick reverse cleanup (non-blocking) while we drive/operate
+            updateOuttakeReverse(dt);
+
             llVision.poll();
             flywheel.update(dt);
             indexer.update(dt);
@@ -329,7 +343,7 @@ public class CurrentRedAutoFar extends LinearOpMode {
                     }
                     if (!indexer.isAutoRunning()) {
                         // ===== go to Intake 2 FIRST =====
-                        setDrivePowerIntake2();   // <<< changed: use 0.75, not full
+                        setDrivePowerIntake2();   // 0.75
                         follower.followPath(paths.AlignIntake2Pose, true);
                         phase = Phase.DRIVE_ALIGN_INTAKE2;
                     }
@@ -429,7 +443,8 @@ public class CurrentRedAutoFar extends LinearOpMode {
                             && !indexer.isPreAdvancing()
                             && !indexer.isIntakeAdvancing()) {
 
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to Launch Second Row (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceRemainingRow2 = computePreAdvanceRow2(tidToUse);
 
@@ -574,7 +589,8 @@ public class CurrentRedAutoFar extends LinearOpMode {
                     intakeSettleTimerS += dt;
 
                     if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to Launch First Row (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceRemainingRow1 = computePreAdvanceRow1(tidToUse);
 
@@ -662,6 +678,8 @@ public class CurrentRedAutoFar extends LinearOpMode {
             telemetry.addData("Indexer IntakeAdv", indexer.isIntakeAdvancing());
 
             telemetry.addData("Intake Active", intakeActive);
+            telemetry.addData("OuttakeReverse", outtakeReverseActive);
+            telemetry.addData("OuttakeTimer", "%.2f", outtakeReverseTimerS);
             telemetry.addData("Intake Settle (s)", "%.2f", intakeSettleTimerS);
 
             telemetry.addData("Pose", poseStr(follower.getPose()));
@@ -689,13 +707,45 @@ public class CurrentRedAutoFar extends LinearOpMode {
     }
 
     private void intakeStart() {
+        // cancel any reverse cleanup
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
         intakeActive = true;
         intakeMotor.setPower(1.0);
     }
 
     private void intakeStop() {
+        // hard stop cancels reverse too
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
         intakeActive = false;
         intakeMotor.setPower(0.0);
+    }
+
+    // NEW: start timed reverse cleanup (non-blocking)
+    private void startOuttakeReverse() {
+        outtakeReverseActive = true;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = false;
+        intakeMotor.setPower(OUTTAKE_REVERSE_POWER);
+    }
+
+    // NEW: tick reverse cleanup while pathing
+    private void updateOuttakeReverse(double dt) {
+        if (!outtakeReverseActive) return;
+
+        outtakeReverseTimerS += dt;
+        if (outtakeReverseTimerS >= OUTTAKE_REVERSE_TIME_S) {
+            outtakeReverseActive = false;
+            outtakeReverseTimerS = 0.0;
+
+            if (!intakeActive) {
+                intakeMotor.setPower(0.0);
+            }
+        }
     }
 
     // Preloads mapping: PPG → 0, PGP → 1, GPP → 2
@@ -707,9 +757,9 @@ public class CurrentRedAutoFar extends LinearOpMode {
     }
 
     private int computePreAdvanceRow1(int tid) {
-        if (tid == TID_PPG) return 1;
-        if (tid == TID_PGP) return 2;
-        if (tid == TID_GPP) return 0;
+        if (tid == TID_PPG) return 0;
+        if (tid == TID_PGP) return 1;
+        if (tid == TID_GPP) return 2;
         return 0;
     }
 

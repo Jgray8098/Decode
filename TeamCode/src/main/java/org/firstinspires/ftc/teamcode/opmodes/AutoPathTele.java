@@ -18,7 +18,7 @@ import org.firstinspires.ftc.teamcode.mechanism.Indexer;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
 
-@TeleOp(name = "AutoPathTele")
+//@TeleOp(name = "AutoPathTele")
 public class AutoPathTele extends OpMode {
     private final MecanumDrive drive = new MecanumDrive();
 

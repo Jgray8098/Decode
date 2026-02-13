@@ -18,7 +18,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Current Blue Auto Far", group = "Comp")
+@Autonomous(name = "Blue Far", group = "Comp")
 public class CurrentBlueAutoFar extends LinearOpMode {
 
     // =========================================================
@@ -36,10 +36,10 @@ public class CurrentBlueAutoFar extends LinearOpMode {
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(59.152, 22.663, Math.toRadians(117));
 
     // Intake 1 sequence (SLOW)  ------------------------------------------------
-    private static final Pose ALIGN_INTAKE1_POSE    = new Pose(50.000, 37.517, Math.toRadians(180));
-    private static final Pose INTAKE_P11_POSE       = new Pose(37.204, 37.517, Math.toRadians(180));
-    private static final Pose INTAKE_P12_POSE       = new Pose(32.389, 37.517, Math.toRadians(180));
-    private static final Pose INTAKE_G11_POSE       = new Pose(27.793, 37.517, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE1_POSE    = new Pose(50.000, 33.0, Math.toRadians(180));
+    private static final Pose INTAKE_P11_POSE       = new Pose(37.204, 33.0, Math.toRadians(180));
+    private static final Pose INTAKE_P12_POSE       = new Pose(32.389, 33.0, Math.toRadians(180));
+    private static final Pose INTAKE_G11_POSE       = new Pose(27.793, 33.0, Math.toRadians(180));
     private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(54.000, 21.000, Math.toRadians(112));
 
     // Intake 2 sequence (FAST/NORMAL) ------------------------------------------
@@ -113,6 +113,12 @@ public class CurrentBlueAutoFar extends LinearOpMode {
     private static final double INTAKE_SETTLE_S = 0.65;
 
     // =========================================================
+    // ============ NEW: REVERSE CLEANUP (NON-BLOCKING) =========
+    // =========================================================
+    private static final double OUTTAKE_REVERSE_TIME_S = 1.0;
+    private static final double OUTTAKE_REVERSE_POWER  = -1.0; // reverse
+
+    // =========================================================
     // ==================== DEVICES / STATE ====================
     // =========================================================
     private Limelight3A limelight;
@@ -137,10 +143,14 @@ public class CurrentBlueAutoFar extends LinearOpMode {
     // Intake control
     private boolean intakeActive = false;
 
+    // NEW: timed reverse cleanup (runs while driving back to launch)
+    private boolean outtakeReverseActive = false;
+    private double outtakeReverseTimerS = 0.0;
+
     // Intake settle timing
     private double intakeSettleTimerS = 0.0;
 
-    // NEW: intake-advance counter (used for GP -> PP transition)
+    // intake-advance counter (used for GP -> PP transition and others)
     private int intakeAdvanceRemaining = 0;
 
     // Spin-up timing
@@ -223,6 +233,7 @@ public class CurrentBlueAutoFar extends LinearOpMode {
         telemetry.addData("Default Pattern", "PPG (TID 23) if no tag seen");
         telemetry.addData("Start Pose", poseStr(START_POSE));
         telemetry.addData("Intake2 Chassis Power (first)", MAX_POWER_INTAKE2);
+        telemetry.addData("Reverse Cleanup", "Enabled (1.0s reverse while driving back to launch)");
         telemetry.update();
 
         // ===== INIT loop: scan until START =====
@@ -293,6 +304,9 @@ public class CurrentBlueAutoFar extends LinearOpMode {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
 
+            // NEW: tick reverse cleanup (non-blocking) while we drive/operate
+            updateOuttakeReverse(dt);
+
             llVision.poll();
             flywheel.update(dt);
             indexer.update(dt);
@@ -359,7 +373,7 @@ public class CurrentBlueAutoFar extends LinearOpMode {
                     if (!follower.isBusy()) {
                         intakeSettleTimerS = 0.0;
 
-                        // NEW: After GP, rotate TWO slots before going toward PP
+                        // After GP, rotate TWO slots before going toward PP
                         intakeAdvanceRemaining = 2;
 
                         phase = Phase.WAIT_SETTLE_AFTER_GP;
@@ -367,7 +381,7 @@ public class CurrentBlueAutoFar extends LinearOpMode {
                     break;
                 }
 
-                // NEW: two-slot rotate after GP before moving on
+                // two-slot rotate after GP before moving on
                 case WAIT_SETTLE_AFTER_GP: {
                     intakeSettleTimerS += dt;
 
@@ -418,7 +432,7 @@ public class CurrentBlueAutoFar extends LinearOpMode {
                 case DRIVE_INTAKE_PP: {
                     if (!follower.isBusy()) {
                         intakeSettleTimerS = 0.0;
-                        // One-slot after PP (unchanged behavior)
+                        // One-slot after PP
                         intakeAdvanceRemaining = 1;
                         phase = Phase.WAIT_SETTLE_AFTER_PP;
                     }
@@ -444,11 +458,12 @@ public class CurrentBlueAutoFar extends LinearOpMode {
                                 && !indexer.isPreAdvancing()
                                 && !indexer.isIntakeAdvancing()) {
 
-                            intakeStop();
+                            // NEW: reverse for 1s while driving back to Launch Second Row (do NOT block)
+                            startOuttakeReverse();
 
                             preAdvanceRemainingRow2 = computePreAdvanceRow2(tidToUse);
 
-                            setDrivePowerNormal(); // shooting travel can stay full
+                            setDrivePowerNormal();
                             follower.followPath(paths.LaunchSecondRowPose, true);
                             phase = Phase.DRIVE_LAUNCH_SECOND_ROW;
                         }
@@ -592,7 +607,8 @@ public class CurrentBlueAutoFar extends LinearOpMode {
                     intakeSettleTimerS += dt;
 
                     if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to Launch First Row (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceRemainingRow1 = computePreAdvanceRow1(tidToUse);
 
@@ -680,6 +696,8 @@ public class CurrentBlueAutoFar extends LinearOpMode {
             telemetry.addData("Indexer IntakeAdv", indexer.isIntakeAdvancing());
 
             telemetry.addData("Intake Active", intakeActive);
+            telemetry.addData("OuttakeReverse", outtakeReverseActive);
+            telemetry.addData("OuttakeTimer", "%.2f", outtakeReverseTimerS);
             telemetry.addData("Intake Settle (s)", "%.2f", intakeSettleTimerS);
             telemetry.addData("IntakeAdv Remaining", intakeAdvanceRemaining);
 
@@ -708,13 +726,45 @@ public class CurrentBlueAutoFar extends LinearOpMode {
     }
 
     private void intakeStart() {
+        // cancel any reverse cleanup
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
         intakeActive = true;
         intakeMotor.setPower(1.0);
     }
 
     private void intakeStop() {
+        // hard stop cancels reverse too
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
         intakeActive = false;
         intakeMotor.setPower(0.0);
+    }
+
+    // start timed reverse cleanup (non-blocking)
+    private void startOuttakeReverse() {
+        outtakeReverseActive = true;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = false;
+        intakeMotor.setPower(OUTTAKE_REVERSE_POWER);
+    }
+
+    // tick reverse cleanup while pathing
+    private void updateOuttakeReverse(double dt) {
+        if (!outtakeReverseActive) return;
+
+        outtakeReverseTimerS += dt;
+        if (outtakeReverseTimerS >= OUTTAKE_REVERSE_TIME_S) {
+            outtakeReverseActive = false;
+            outtakeReverseTimerS = 0.0;
+
+            if (!intakeActive) {
+                intakeMotor.setPower(0.0);
+            }
+        }
     }
 
     // Preloads mapping: PPG → 0, PGP → 1, GPP → 2
@@ -726,9 +776,9 @@ public class CurrentBlueAutoFar extends LinearOpMode {
     }
 
     private int computePreAdvanceRow1(int tid) {
-        if (tid == TID_PPG) return 0;
-        if (tid == TID_PGP) return 1;
-        if (tid == TID_GPP) return 2;
+        if (tid == TID_PPG) return 1;
+        if (tid == TID_PGP) return 2;
+        if (tid == TID_GPP) return 0;
         return 0;
     }
 

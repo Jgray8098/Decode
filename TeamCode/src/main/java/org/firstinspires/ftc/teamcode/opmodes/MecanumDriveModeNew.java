@@ -11,7 +11,7 @@ import org.firstinspires.ftc.teamcode.control.HeadingLockController;
 import org.firstinspires.ftc.teamcode.vision.LimelightVisionFtc;
 import org.firstinspires.ftc.teamcode.mechanism.Indexer;
 
-@TeleOp(name = "MecanumDriveModeNew")
+//@TeleOp(name = "MecanumDriveModeNew")
 public class MecanumDriveModeNew extends OpMode {
     MecanumDrive drive = new MecanumDrive();
 

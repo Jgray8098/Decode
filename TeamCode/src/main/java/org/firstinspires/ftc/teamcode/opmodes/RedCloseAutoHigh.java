@@ -18,7 +18,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "RedCloseAutoHigh", group = "Comp")
+@Autonomous(name = "Red Close", group = "Comp")
 public class RedCloseAutoHigh extends LinearOpMode {
 
     // ===== Limelight pipelines & TIDs =====
@@ -31,8 +31,8 @@ public class RedCloseAutoHigh extends LinearOpMode {
     private static final int TID_PPG = 23;
 
     // ===== Fallback if tag not detected =====
-    private static final double TAG_DETECT_TIMEOUT_S = 1.25; // how long we try to see tag before defaulting
-    private static final long   PIPE_SWAP_PERIOD_MS  = 50;   // pipeline cycle rate during detect
+    private static final double TAG_DETECT_TIMEOUT_S = 1.25;
+    private static final long   PIPE_SWAP_PERIOD_MS  = 50;
 
     // ===== Flywheel (CLOSE) gates =====
     private static final double SPINUP_MIN_WAIT_S = 0.60;
@@ -41,17 +41,20 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     // ===== Drive power profiles =====
     private static final double MAX_POWER_NORMAL = 1.0;
-    private static final double MAX_POWER_INTAKE = 0.45;  // tweak (0.4–0.6)
+    private static final double MAX_POWER_INTAKE = 0.45;
 
     // ===== Intake settle timing =====
     private static final double INTAKE_SETTLE_S = 0.65;
 
-    // ===== NEW: HOOD positions (same as the working BlueCloseAutoHigh update) =====
-    // Put your TeleOp close-zone hood values here
+    // ===== HOOD positions (TeleOp close-zone values) =====
     private static final double HOOD_CLOSE_POS = 0.15;
-    private static final double HOOD_LONG_POS  = 0.40; // not used for CLOSE, but Flywheel expects both in your FAR code
+    private static final double HOOD_LONG_POS  = 0.40;
 
-    // ===== Field Poses (inches, radians) – RED SIDE (mirrored from blue) =====
+    // ===== NEW: outtake reverse cleanup (runs while driving back to launch) =====
+    private static final double OUTTAKE_REVERSE_TIME_S = 1.0;
+    private static final double OUTTAKE_REVERSE_POWER  = -1.0; // reverse
+
+    // ===== Field Poses (inches, radians) – RED SIDE =====
     private static final Pose START_POSE = new Pose(123.539, 123.153, Math.toRadians(126.0));
 
     private static final Pose APRILTAG_POSE_START = START_POSE;
@@ -64,16 +67,16 @@ public class RedCloseAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_P12_POSE      = new Pose(109.957, 86.477, Math.toRadians(0.0));
     private static final Pose INTAKE_G11_POSE      = new Pose(116.976, 86.477, Math.toRadians(0.0));
 
-    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(89, 97, Math.toRadians(38));
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(89, 97, Math.toRadians(39));
 
     private static final Pose ALIGN_INTAKE2_POSE   = new Pose(96.306, 63.928, Math.toRadians(0.0));
     private static final Pose INTAKE_P21_POSE      = new Pose(102.973, 63.928, Math.toRadians(0.0));
     private static final Pose INTAKE_G21_POSE      = new Pose(108.378, 63.928, Math.toRadians(0.0));
     private static final Pose INTAKE_P22_POSE      = new Pose(116.590, 63.928, Math.toRadians(0.0));
 
-    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(89, 97, Math.toRadians(34.0));
+    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(89, 97, Math.toRadians(35.0));
 
-    private static final Pose PARK_POSE = new Pose(115.432, 75.475, Math.toRadians(0.0));
+    private static final Pose PARK_POSE = new Pose(112.432, 75.475, Math.toRadians(0.0));
 
     // ===== Devices =====
     private Limelight3A limelight;
@@ -91,7 +94,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
     private int detectedTid = -1;
     private long lastPipeSwapNs = 0L;
 
-    // Pre-advance sets (three separate launch events)
+    // Pre-advance sets
     private int preAdvanceTotalPreloads = 0;
     private int preAdvanceRemainingPreloads = 0;
 
@@ -103,6 +106,10 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     // Intake control
     private boolean intakeActive = false;
+
+    // NEW: timed outtake reverse (non-blocking)
+    private boolean outtakeReverseActive = false;
+    private double outtakeReverseTimerS = 0.0;
 
     // Intake settle timing
     private double intakeSettleTimerS = 0.0;
@@ -172,7 +179,7 @@ public class RedCloseAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();
 
-        // ✅ UPDATED: include hood servo + enable hood control (close-zone behavior)
+        // Flywheel with hood control (close-zone behavior)
         flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
         flywheel.setHoodPositions(HOOD_CLOSE_POS, HOOD_LONG_POS);
@@ -189,12 +196,11 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
         setDrivePowerNormal();
 
-        telemetry.addLine("RedCloseAutoHigh: Ready (hood+RPM close-zone enabled).");
+        telemetry.addLine("RedCloseAutoHigh: Ready (hood+RPM close-zone enabled + timed reverse cleanup).");
         telemetry.addData("Fallback Pattern", "PPG (TID 23)");
         telemetry.addData("Hood Close Pos", "%.2f", HOOD_CLOSE_POS);
         telemetry.update();
 
-        // ===== INIT loop =====
         while (!isStarted() && !isStopRequested()) {
             telemetry.addData("Hood pos (init)", "%.2f", safeHoodPos());
             telemetry.update();
@@ -202,7 +208,6 @@ public class RedCloseAutoHigh extends LinearOpMode {
         }
         if (isStopRequested()) return;
 
-        // ===== RUN =====
         long lastNs = System.nanoTime();
 
         // Default fallback is PPG unless overwritten
@@ -219,6 +224,9 @@ public class RedCloseAutoHigh extends LinearOpMode {
         while (opModeIsActive() && phase != Phase.DONE) {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
+
+            // NEW: tick non-blocking reverse cleanup while we drive
+            updateOuttakeReverse(dt);
 
             llVision.poll();
             flywheel.update(dt);
@@ -249,7 +257,6 @@ public class RedCloseAutoHigh extends LinearOpMode {
                         lastPipeSwapNs = now;
                     }
 
-                    // "Last seen wins" during detect window
                     if (llVision.hasTarget()) {
                         int tid = llVision.getTid();
                         if (tid == TID_GPP || tid == TID_PGP || tid == TID_PPG) {
@@ -258,7 +265,6 @@ public class RedCloseAutoHigh extends LinearOpMode {
                         }
                     }
 
-                    // Continue if saw a tag OR timed out
                     if (detectedTid != -1 || detectTagElapsedS >= TAG_DETECT_TIMEOUT_S) {
                         if (detectedTid == -1) tidToUse = TID_PPG;
 
@@ -405,7 +411,8 @@ public class RedCloseAutoHigh extends LinearOpMode {
                     intakeSettleTimerS += dt;
 
                     if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to launch (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceTotalRow1     = computePreAdvanceRow1(tidToUse);
                         preAdvanceRemainingRow1 = preAdvanceTotalRow1;
@@ -548,7 +555,8 @@ public class RedCloseAutoHigh extends LinearOpMode {
                     intakeSettleTimerS += dt;
 
                     if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to launch (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceTotalRow2     = computePreAdvanceRow2(tidToUse);
                         preAdvanceRemainingRow2 = preAdvanceTotalRow2;
@@ -637,6 +645,10 @@ public class RedCloseAutoHigh extends LinearOpMode {
             telemetry.addData("Indexer preAdv", indexer.isPreAdvancing());
             telemetry.addData("Indexer intakeAdv", indexer.isIntakeAdvancing());
             telemetry.addData("Indexer auto", indexer.isAutoRunning());
+
+            telemetry.addData("OuttakeReverse", outtakeReverseActive);
+            telemetry.addData("OuttakeTimer", "%.2f", outtakeReverseTimerS);
+
             telemetry.update();
         }
 
@@ -659,8 +671,47 @@ public class RedCloseAutoHigh extends LinearOpMode {
         return target > 0 && errR < RPM_TOL && errL < RPM_TOL && (spinupElapsedS >= SPINUP_MIN_WAIT_S);
     }
 
-    private void intakeStart() { intakeActive = true; intakeMotor.setPower(1.0); }
-    private void intakeStop()  { intakeActive = false; intakeMotor.setPower(0.0); }
+    private void intakeStart() {
+        // cancel any reverse cleanup
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = true;
+        intakeMotor.setPower(1.0);
+    }
+
+    private void intakeStop()  {
+        // hard stop cancels reverse too
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = false;
+        intakeMotor.setPower(0.0);
+    }
+
+    // NEW: start timed reverse cleanup (non-blocking)
+    private void startOuttakeReverse() {
+        outtakeReverseActive = true;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = false;
+        intakeMotor.setPower(OUTTAKE_REVERSE_POWER);
+    }
+
+    // NEW: tick reverse cleanup while pathing
+    private void updateOuttakeReverse(double dt) {
+        if (!outtakeReverseActive) return;
+
+        outtakeReverseTimerS += dt;
+        if (outtakeReverseTimerS >= OUTTAKE_REVERSE_TIME_S) {
+            outtakeReverseActive = false;
+            outtakeReverseTimerS = 0.0;
+
+            if (!intakeActive) {
+                intakeMotor.setPower(0.0);
+            }
+        }
+    }
 
     // Avoid crashing telemetry if your Flywheel class doesn’t expose hood position in some builds
     private double safeHoodPos() {

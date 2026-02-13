@@ -18,7 +18,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "BlueCloseAutoHigh", group = "Comp")
+@Autonomous(name = "Blue Close", group = "Comp")
 public class BlueCloseAutoHigh extends LinearOpMode {
 
     // ===== Limelight pipelines & TIDs =====
@@ -49,10 +49,13 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final double TAG_DETECT_TIMEOUT_S = 1.25; // tweak 0.8–1.5
     private static final long   PIPE_SWAP_PERIOD_MS  = 50;
 
-    // ===== NEW: HOOD positions (same idea as your FAR autos) =====
-    // Use your TeleOp close-zone values here
+    // ===== HOOD positions (TeleOp close-zone values) =====
     private static final double HOOD_CLOSE_POS = 0.15;
-    private static final double HOOD_LONG_POS  = 0.40; // not used in this auto, but Flywheel expects both in your FAR code
+    private static final double HOOD_LONG_POS  = 0.40; // not used here, but Flywheel expects both
+
+    // ===== NEW: outtake reverse cleanup (runs while driving back to launch) =====
+    private static final double OUTTAKE_REVERSE_TIME_S = 1.0;
+    private static final double OUTTAKE_REVERSE_POWER  = -1.0; // reverse
 
     // ===== Field Poses (inches, radians) =====
     private static final Pose START_POSE = new Pose(20.461, 123.153, Math.toRadians(54));
@@ -115,6 +118,10 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     // Intake control
     private boolean intakeActive = false;
 
+    // NEW: timed outtake reverse (non-blocking)
+    private boolean outtakeReverseActive = false;
+    private double outtakeReverseTimerS = 0.0;
+
     // Intake settle timing
     private double intakeSettleTimerS = 0.0;
     private boolean settleAdvanceIssued = false;
@@ -168,6 +175,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         DRIVE_PARK,
         DONE
     }
+
     private Phase phase = Phase.DRIVE_APRILTAG_POSITION;
 
     @Override
@@ -182,7 +190,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         indexer.init(hardwareMap);
         indexer.hardZero();
 
-        // ✅ UPDATED: include hood servo + enable hood control (TeleOp close-zone behavior)
+        // Flywheel with hood control (TeleOp close-zone behavior)
         flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
         flywheel.setHoodPositions(HOOD_CLOSE_POS, HOOD_LONG_POS);
@@ -199,7 +207,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
 
         setDrivePowerNormal();
 
-        telemetry.addLine("BlueCloseAutoHigh: Ready (hood+RPM close-zone enabled).");
+        telemetry.addLine("BlueCloseAutoHigh: Ready (hood+RPM close-zone enabled + timed reverse cleanup).");
         telemetry.addData("Fallback Pattern", "PPG (TID 23)");
         telemetry.addData("Hood Close Pos", "%.2f", HOOD_CLOSE_POS);
         telemetry.update();
@@ -218,7 +226,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         MotifStorage.motifTid = tidToUse;
         detectedTid = -1;
 
-        // ✅ Set Close-zone state (this should match your TeleOp close zone)
+        // Close-zone state (match TeleOp close zone)
         flywheel.setState(Flywheel.State.CLOSE);
 
         follower.followPath(paths.AprilTagPosition, true);
@@ -227,6 +235,9 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         while (opModeIsActive() && phase != Phase.DONE) {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
+
+            // NEW: tick non-blocking reverse cleanup while we drive
+            updateOuttakeReverse(dt);
 
             llVision.poll();
             flywheel.update(dt);
@@ -417,7 +428,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     intakeSettleTimerS += dt;
 
                     if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to launch (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceTotalRow1     = computePreAdvanceRow1(tidToUse);
                         preAdvanceRemainingRow1 = preAdvanceTotalRow1;
@@ -558,7 +570,8 @@ public class BlueCloseAutoHigh extends LinearOpMode {
                     intakeSettleTimerS += dt;
 
                     if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        intakeStop();
+                        // NEW: reverse for 1s while driving back to launch (do NOT block)
+                        startOuttakeReverse();
 
                         preAdvanceTotalRow2     = computePreAdvanceRow2(tidToUse);
                         preAdvanceRemainingRow2 = preAdvanceTotalRow2;
@@ -646,9 +659,14 @@ public class BlueCloseAutoHigh extends LinearOpMode {
             telemetry.addData("Indexer preAdv", indexer.isPreAdvancing());
             telemetry.addData("Indexer intakeAdv", indexer.isIntakeAdvancing());
             telemetry.addData("Indexer auto", indexer.isAutoRunning());
+
+            telemetry.addData("OuttakeReverse", outtakeReverseActive);
+            telemetry.addData("OuttakeTimer", "%.2f", outtakeReverseTimerS);
+
             telemetry.update();
         }
 
+        // Safety
         intakeStop();
         indexer.setCamOpen(false);
         flywheel.stop();
@@ -667,10 +685,50 @@ public class BlueCloseAutoHigh extends LinearOpMode {
         return target > 0 && errR < RPM_TOL && errL < RPM_TOL && (spinupElapsedS >= SPINUP_MIN_WAIT_S);
     }
 
-    private void intakeStart() { intakeActive = true; intakeMotor.setPower(1.0); }
-    private void intakeStop()  { intakeActive = false; intakeMotor.setPower(0.0); }
+    private void intakeStart() {
+        // cancel any reverse cleanup
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
 
-    // Avoid crashing telemetry if your Flywheel class doesn’t expose hood position in some builds
+        intakeActive = true;
+        intakeMotor.setPower(1.0);
+    }
+
+    private void intakeStop()  {
+        // hard stop cancels reverse too
+        outtakeReverseActive = false;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = false;
+        intakeMotor.setPower(0.0);
+    }
+
+    // NEW: start timed reverse cleanup (non-blocking)
+    private void startOuttakeReverse() {
+        outtakeReverseActive = true;
+        outtakeReverseTimerS = 0.0;
+
+        intakeActive = false;
+        intakeMotor.setPower(OUTTAKE_REVERSE_POWER);
+    }
+
+    // NEW: tick reverse cleanup while pathing
+    private void updateOuttakeReverse(double dt) {
+        if (!outtakeReverseActive) return;
+
+        outtakeReverseTimerS += dt;
+        if (outtakeReverseTimerS >= OUTTAKE_REVERSE_TIME_S) {
+            outtakeReverseActive = false;
+            outtakeReverseTimerS = 0.0;
+
+            // stop motor unless a new intake has started
+            if (!intakeActive) {
+                intakeMotor.setPower(0.0);
+            }
+        }
+    }
+
+    // Avoid crashing telemetry if Flywheel build doesn't expose hood position
     private double safeHoodPos() {
         try { return flywheel.getHoodPosition(); }
         catch (Exception ignored) { return -1.0; }

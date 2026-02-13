@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.NormalizedRGBA;
 import com.qualcomm.robotcore.hardware.SwitchableLight;
 
-@TeleOp(name="Color Test (Tuning v2)")
+//@TeleOp(name="Color Test (Tuning v2)")
 public class ColorTestOpMode extends OpMode {
 
     private RevColorSensorV3 colorSensorFrontR, colorSensorBackR, colorSensorFrontL, colorSensorBackL;
