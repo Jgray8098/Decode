@@ -36,15 +36,15 @@ public class CurrentBlueAutoFar extends LinearOpMode {
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(59.152, 22.663, Math.toRadians(117));
 
     // Intake 1 sequence (SLOW)  ------------------------------------------------
-    private static final Pose ALIGN_INTAKE1_POSE    = new Pose(50.000, 33.0, Math.toRadians(180));
-    private static final Pose INTAKE_P11_POSE       = new Pose(37.204, 33.0, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE1_POSE    = new Pose(50.000, 32.0, Math.toRadians(180));
+    private static final Pose INTAKE_P11_POSE       = new Pose(37.204, 32.0, Math.toRadians(180));
     private static final Pose INTAKE_P12_POSE       = new Pose(32.389, 33.0, Math.toRadians(180));
     private static final Pose INTAKE_G11_POSE       = new Pose(27.793, 33.0, Math.toRadians(180));
     private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(54.000, 21.000, Math.toRadians(112));
 
     // Intake 2 sequence (FAST/NORMAL) ------------------------------------------
     private static final Pose ALIGN_INTAKE2_POSE     = new Pose(55.000, 15.000, Math.toRadians(180));
-    private static final Pose INTAKE_GP_POSE         = new Pose(16.454, 15.000, Math.toRadians(180));
+    private static final Pose INTAKE_GP_POSE         = new Pose(17.454, 15.000, Math.toRadians(180));
     private static final Pose ALIGN_INTAKE2_POSE_2   = new Pose(18.951, 16.227, Math.toRadians(180));
     private static final Pose ALIGN_INTAKE2_POSE_3   = new Pose(18.969, 12.018, Math.toRadians(180));
     private static final Pose INTAKE_PP_POSE         = new Pose(13.675, 10.982, Math.toRadians(180));
@@ -62,10 +62,10 @@ public class CurrentBlueAutoFar extends LinearOpMode {
 
     // Launch 2 return heading (intake2 -> launch second row)
     private static final double H_SECOND_RETURN_START_DEG      = 180;
-    private static final double H_SECOND_RETURN_END_DEG        = 105;
+    private static final double H_SECOND_RETURN_END_DEG        = 107;
 
     // Launch Second Row -> Align Intake 1 (SLOW sequence now happens second)
-    private static final double H_ROW2_TO_ALIGN1_START_DEG     = 105;
+    private static final double H_ROW2_TO_ALIGN1_START_DEG     = 107;
     private static final double H_ROW2_TO_ALIGN1_END_DEG       = 180;
 
     // Intake1 -> Launch First Row

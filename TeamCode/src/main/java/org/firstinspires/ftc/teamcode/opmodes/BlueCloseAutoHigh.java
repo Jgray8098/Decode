@@ -68,17 +68,17 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(53.239, 99.989, Math.toRadians(155));
 
     // Row 1 intake line
-    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(44.432, 86.477, Math.toRadians(180));
-    private static final Pose INTAKE_P11_POSE      = new Pose(37.834, 86.477, Math.toRadians(180));
-    private static final Pose INTAKE_P12_POSE      = new Pose(32.043, 86.477, Math.toRadians(180));
-    private static final Pose INTAKE_G11_POSE      = new Pose(27.024, 86.477, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(44.432, 88.477, Math.toRadians(180));
+    private static final Pose INTAKE_P11_POSE      = new Pose(37.834, 88.477, Math.toRadians(180));
+    private static final Pose INTAKE_P12_POSE      = new Pose(32.043, 87.477, Math.toRadians(180));
+    private static final Pose INTAKE_G11_POSE      = new Pose(27.024, 87.477, Math.toRadians(180));
 
     // Launch pose for first row
-    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(51.046, 98.182, Math.toRadians(138));
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(51.046, 98.182, Math.toRadians(141));
 
     // Row 2 intake line
-    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(46.694, 62.928, Math.toRadians(180));
-    private static final Pose INTAKE_P21_POSE      = new Pose(38.027, 62.928, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(46.694, 63.928, Math.toRadians(180));
+    private static final Pose INTAKE_P21_POSE      = new Pose(38.027, 63.928, Math.toRadians(180));
     private static final Pose INTAKE_G21_POSE      = new Pose(32.622, 62.928, Math.toRadians(180));
     private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 62.928, Math.toRadians(180));
 
@@ -86,7 +86,7 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(52.046, 98.182, Math.toRadians(142));
 
     // Final park
-    private static final Pose PARK_POSE = new Pose(30.568, 75.475, Math.toRadians(180));
+    private static final Pose PARK_POSE = new Pose(32.568, 75.475, Math.toRadians(180));
 
     // ===== Devices =====
     private Limelight3A limelight;

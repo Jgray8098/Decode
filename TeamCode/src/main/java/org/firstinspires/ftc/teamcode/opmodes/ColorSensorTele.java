@@ -48,6 +48,10 @@ public class ColorSensorTele extends OpMode {
     // Cancel auto-nav if driver moves sticks beyond this
     private static final double CANCEL_STICK_THRESH = 0.12;
 
+    // Indexer step delay defaults
+    private static final double INDEXER_STEP_DELAY_NORMAL = 0.15;
+    private static final double INDEXER_STEP_DELAY_CONTINUOUS = 0.0; // try to eliminate dwell between steps
+
     private Limelight3A limelight;
     private LimelightVisionFtc llVision;
     private HeadingLockController lockCtrl;
@@ -105,8 +109,13 @@ public class ColorSensorTele extends OpMode {
     // When we advance one slot, rotate tracker AFTER the move completes
     private boolean advancePending = false;
 
-    // NEW: true if the pending advance was started via startPreAdvanceOneSlot()
+    // true if the pending advance was started via startPreAdvanceOneSlot()
     private boolean advanceWasPre = false;
+
+    // ===== LB2: continuous 2-slot pre-advance (no dwell between steps) =====
+    private int manualPreAdvanceRemaining = 0;
+    private boolean manualPreAdvanceActive = false;
+    private double savedIndexerStepDelay = INDEXER_STEP_DELAY_NORMAL;
 
     // Auto-sort state machine (RB2)
     private boolean sortActive = false;
@@ -160,7 +169,7 @@ public class ColorSensorTele extends OpMode {
         );
         indexer.setHomeCamOnInit(false);
         indexer.init(hardwareMap);
-        indexer.setStepDelay(0.15);
+        indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
 
         // ---------- Flywheel ----------
         flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
@@ -189,7 +198,7 @@ public class ColorSensorTele extends OpMode {
         telemetry.addLine("[G1] Y = AUTO-NAV to FAR LAUNCH pose (cancel by moving sticks)");
         telemetry.addLine("[G1] B = Cancel AUTO-NAV");
         telemetry.addLine("[G2] B = Auto launch 3 (after it completes, tracker assumes indexer EMPTY)");
-        telemetry.addLine("[G2] LB = Advance one slot (tracker rotates AFTER move completes)");
+        telemetry.addLine("[G2] LB = Pre-advance TWO slots CONTINUOUS (pre-advance speed, minimal dwell)");
         telemetry.addLine("[G2] RB = AUTO SORT (uses PreAdvance to reduce jam-ups when sorting)");
         telemetry.addData("MotifTid (from Auto)", MotifStorage.motifTid);
     }
@@ -238,6 +247,11 @@ public class ColorSensorTele extends OpMode {
 
         advancePending = false;
         advanceWasPre = false;
+
+        manualPreAdvanceRemaining = 0;
+        manualPreAdvanceActive = false;
+        savedIndexerStepDelay = INDEXER_STEP_DELAY_NORMAL;
+        indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
 
         sortActive = false;
         sortStepsRemaining = 0;
@@ -324,26 +338,44 @@ public class ColorSensorTele extends OpMode {
 
         // ---------- AUTO-LAUNCH (B2) ----------
         boolean b2 = gamepad2.b;
-        if (b2 && !prevB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving() && !sortActive) {
+        if (b2 && !prevB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving() && !sortActive && !manualPreAdvanceActive) {
             indexer.startAutoLaunchAllThreeContinuous();
             resetAfterLaunchPending = true;
         }
         prevB2 = b2;
 
-        // ---------- MANUAL ADVANCE ONE SLOT (LB2) ----------
+        // ---------- LB2: CONTINUOUS 2-SLOT PRE-ADVANCE ----------
         boolean lb2 = gamepad2.left_bumper;
-        if (lb2 && !prevLB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving()
-                && !sortActive && !advancePending && !indexer.isPreAdvancing()) {
-            indexer.advanceOneSlot();
+        if (lb2 && !prevLB2
+                && flywheelActive
+                && !indexer.isAutoRunning()
+                && !indexer.isMoving()
+                && !sortActive
+                && !advancePending
+                && !indexer.isPreAdvancing()
+                && !manualPreAdvanceActive) {
+
+            manualPreAdvanceActive = true;
+            manualPreAdvanceRemaining = 2;
+
+            // eliminate dwell while we chain the two steps
+            savedIndexerStepDelay = INDEXER_STEP_DELAY_NORMAL;
+            indexer.setStepDelay(INDEXER_STEP_DELAY_CONTINUOUS);
+
+            // start step #1 immediately
+            indexer.startPreAdvanceOneSlot();
+            manualPreAdvanceRemaining--;
+
             advancePending = true;
-            advanceWasPre = false;
+            advanceWasPre = true;
         }
         prevLB2 = lb2;
 
         // ---------- AUTO SORT (RB2) ----------
         boolean rb2 = gamepad2.right_bumper;
         if (rb2 && !prevRB2 && !indexer.isAutoRunning() && !indexer.isMoving()
-                && !sortActive && !advancePending && !indexer.isPreAdvancing()) {
+                && !sortActive && !advancePending && !indexer.isPreAdvancing()
+                && !manualPreAdvanceActive) {
 
             // Only if tracking is enabled and exactly 2 PURPLE + 1 GREEN
             if (artifactTracker.isTrackingEnabled()
@@ -363,15 +395,40 @@ public class ColorSensorTele extends OpMode {
         // ---------- INDEXER UPDATE ----------
         indexer.update(dt);
 
-        // ---------- Handle "advance completed" rotation (manual OR sort) ----------
+        // ---------- Handle "advance completed" rotation ----------
         boolean advanceDone = advancePending
                 && !indexer.isMoving()
                 && (!advanceWasPre || !indexer.isPreAdvancing());
 
         if (advanceDone) {
+            // rotate tracker once per completed slot
             artifactTracker.onAdvanceForward();
+
+            // clear pending
             advancePending = false;
             advanceWasPre = false;
+
+            // If LB2 chain is active, immediately start the next pre-advance (no pause)
+            if (manualPreAdvanceActive) {
+                if (manualPreAdvanceRemaining > 0
+                        && flywheelActive
+                        && !indexer.isAutoRunning()
+                        && !indexer.isMoving()
+                        && !indexer.isPreAdvancing()) {
+
+                    indexer.startPreAdvanceOneSlot();
+                    manualPreAdvanceRemaining--;
+
+                    advancePending = true;
+                    advanceWasPre = true;
+                }
+
+                // done with both steps -> restore normal delay
+                if (manualPreAdvanceRemaining == 0 && !advancePending) {
+                    manualPreAdvanceActive = false;
+                    indexer.setStepDelay(savedIndexerStepDelay);
+                }
+            }
         }
 
         // ---------- Detect launch completion -> reset tracking to EMPTY ----------
@@ -385,6 +442,11 @@ public class ColorSensorTele extends OpMode {
 
             advancePending = false;
             advanceWasPre = false;
+
+            // cancel any manual chain and restore delay
+            manualPreAdvanceRemaining = 0;
+            manualPreAdvanceActive = false;
+            indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
         }
         prevIndexerAutoRunning = autoRunning;
 
@@ -394,7 +456,8 @@ public class ColorSensorTele extends OpMode {
                     && !indexer.isAutoRunning()
                     && !advancePending
                     && !indexer.isPreAdvancing()
-                    && sortStepsRemaining > 0) {
+                    && sortStepsRemaining > 0
+                    && !manualPreAdvanceActive) {
 
                 // use gentle pre-advance during sorting
                 indexer.startPreAdvanceOneSlot();
@@ -441,6 +504,9 @@ public class ColorSensorTele extends OpMode {
         telemetry.addData("SortActive", sortActive);
         telemetry.addData("SortStepsRemaining", sortStepsRemaining);
         telemetry.addData("IndexerPreAdvancing", indexer.isPreAdvancing());
+
+        telemetry.addData("LB2ChainActive", manualPreAdvanceActive);
+        telemetry.addData("LB2StepsRem", manualPreAdvanceRemaining);
 
         telemetry.update();
     }
