@@ -1,5 +1,5 @@
 // ===============================
-// Indexer.java (FULLY UPDATED - forward-only pocket sync, no init motion, + JOG MODE)
+// Indexer.java (UPDATED - adds continuous multi-slot PRE-ADVANCE + INTAKE-ADVANCE)
 // ===============================
 package org.firstinspires.ftc.teamcode.mechanism;
 
@@ -22,12 +22,17 @@ import com.qualcomm.robotcore.hardware.Servo;
  *  - Gentle pre-advance state machine (slower power + settle)
  *  - Gentle intake-advance state machine
  *
+ * NEW (this update):
+ *  - startPreAdvanceSlots(int slots): ONE continuous RUN_TO_POSITION move for N slots at preAdvancePower
+ *    (so 2 slots will NOT stop at the intermediate pocket)
+ *  - startIntakeAdvanceSlots(int slots): same idea at intakeAdvancePower
+ *
  * Forward-only pocket re-sync:
  *  - syncToNextPocketForward(true) will move ONLY forward to the next pocket (never reverse)
  *  - or do nothing if already within tolerance of a pocket.
  *
  * INIT behavior:
- *  - cam motion controlled by homeCamOnInit (you currently have it TRUE)
+ *  - cam motion controlled by homeCamOnInit
  *
  * NEW: JOG MODE (belt slip / jam recovery)
  *  - enterJogMode(): forces cam closed, cancels sequences, motor switches to RUN_WITHOUT_ENCODER
@@ -48,10 +53,6 @@ public class Indexer {
     private final double camInitPos;     // cam closed
     private final double camOpenPos;     // cam open
 
-    // NOTE: you currently have this TRUE in your pasted file.
-    // This means the cam will move (to closed) during init() for both Auto and TeleOp.
-    // If you want "cam moves during init for Auto but NOT TeleOp", keep this TRUE here,
-    // and in TeleOp set indexer.setHomeCamOnInit(false) BEFORE init(hardwareMap).
     private boolean homeCamOnInit = true;
 
     private int ticksPerSlot;
@@ -222,14 +223,34 @@ public class Indexer {
         runToTarget(indexerPower);
     }
 
-    public void startPreAdvanceOneSlot() {
+    // =========================================================
+    // NEW: Continuous multi-slot gentle moves (NO intermediate stop)
+    // =========================================================
+
+    /**
+     * Gentle pre-advance for N slots in ONE continuous move (RUN_TO_POSITION).
+     * Example: startPreAdvanceSlots(2) -> moves 2 pockets continuously at preAdvancePower.
+     */
+    public void startPreAdvanceSlots(int slotsToAdvance) {
         if (jogMode) return;
-        startGentleOneSlot(GentleMode.PREADVANCE, preAdvancePower, preAdvanceSettleDelayS);
+        startGentleSlots(GentleMode.PREADVANCE, slotsToAdvance, preAdvancePower, preAdvanceSettleDelayS);
+    }
+
+    /**
+     * Gentle intake-advance for N slots in ONE continuous move (RUN_TO_POSITION).
+     */
+    public void startIntakeAdvanceSlots(int slotsToAdvance) {
+        if (jogMode) return;
+        startGentleSlots(GentleMode.INTAKE, slotsToAdvance, intakeAdvancePower, intakeAdvanceSettleDelayS);
+    }
+
+    // Keep your existing one-slot APIs (now just call the multi-slot versions)
+    public void startPreAdvanceOneSlot() {
+        startPreAdvanceSlots(1);
     }
 
     public void startIntakeAdvanceOneSlot() {
-        if (jogMode) return;
-        startGentleOneSlot(GentleMode.INTAKE, intakeAdvancePower, intakeAdvanceSettleDelayS);
+        startIntakeAdvanceSlots(1);
     }
 
     public boolean isPreAdvancing() {
@@ -240,8 +261,9 @@ public class Indexer {
         return gentleAdvancing && gentleMode == GentleMode.INTAKE;
     }
 
-    private void startGentleOneSlot(GentleMode mode, double power, double settleS) {
+    private void startGentleSlots(GentleMode mode, int slotsToAdvance, double power, double settleS) {
         if (jogMode) return;
+        if (slotsToAdvance <= 0) return;
         if (moving || autoRunning || gentleAdvancing) return;
 
         gentleMode = mode;
@@ -250,9 +272,12 @@ public class Indexer {
         timerS = 0.0;
         gentleSettleDelayS = Math.max(0.0, settleS);
 
-        targetPosition += ticksPerSlot;
+        // ONE target jump (this is the key to not stopping at the intermediate pocket)
+        targetPosition += slotsToAdvance * ticksPerSlot;
         runToTarget(power);
     }
+
+    // =========================================================
 
     /** Stepped 3-ball launch (Auto). */
     public void startAutoLaunchAllThree() {
@@ -369,9 +394,6 @@ public class Indexer {
         double x = stickX;
         if (Math.abs(x) < jogDeadband) x = 0.0;
 
-        // optional: slightly soften near center for fine positioning
-        // x = x * x * Math.signum(x);
-
         double pwr = clamp(x * jogMaxPower, -jogMaxPower, jogMaxPower);
         indexer.setPower(pwr);
     }
@@ -422,7 +444,8 @@ public class Indexer {
         // Advance timers if any state machine is active
         if (autoRunning || gentleAdvancing) timerS += dt;
 
-        // ===== Gentle one-slot state machine (pre-advance OR intake-advance) =====
+        // ===== Gentle move state machine (pre-advance OR intake-advance) =====
+        // NOTE: For multi-slot advances, this still only settles ONCE at the end.
         if (gentleAdvancing) {
             switch (gentleStep) {
                 case 0:
@@ -562,7 +585,3 @@ public class Indexer {
         return Math.max(lo, Math.min(hi, v));
     }
 }
-
-
-
-

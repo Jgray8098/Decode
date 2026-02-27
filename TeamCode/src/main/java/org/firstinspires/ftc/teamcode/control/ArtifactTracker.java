@@ -1,3 +1,6 @@
+// ===============================
+// ArtifactTracker.java (UPDATED)
+// ===============================
 package org.firstinspires.ftc.teamcode.control;
 
 import com.qualcomm.hardware.rev.RevColorSensorV3;
@@ -88,7 +91,6 @@ public class ArtifactTracker {
         frontL.setGain(gain);
         backL.setGain(gain);
 
-        // Unknown until you declare empty
         trackingEnabled = false;
         slot[1] = Color.UNKNOWN;
         slot[2] = Color.UNKNOWN;
@@ -134,7 +136,6 @@ public class ArtifactTracker {
                 slot[1] = stable;
             }
         } else {
-            // still keep stability reset if no ball present so we don't carry stale state
             if (!r.present) { rLast = Color.UNKNOWN; rStable = 0; }
         }
 
@@ -161,7 +162,6 @@ public class ArtifactTracker {
         slot[2] = old1;
         slot[3] = old2;
 
-        // After motion, reset stability so the next capture is clean
         resetStationStability();
     }
 
@@ -189,24 +189,57 @@ public class ArtifactTracker {
         return new Color[]{ slot[3], slot[1], slot[2] };
     }
 
+    // =========================================================
+    // Slot3 inference/assumption helpers (for sorting)
+    // =========================================================
+
+    /** Only sets slot3 if it is UNKNOWN or EMPTY. */
+    public void assumeSlot3(Color assumed) {
+        if (!trackingEnabled) return;
+        if (assumed != Color.GREEN && assumed != Color.PURPLE) return;
+
+        if (slot[3] == Color.UNKNOWN || slot[3] == Color.EMPTY) {
+            slot[3] = assumed;
+        }
+    }
+
+    /**
+     * Infer slot3 assuming the set must be exactly {2 PURPLE, 1 GREEN},
+     * using only slots 1 and 2.
+     */
+    public Color inferSlot3AssumingTwoP1G() {
+        if (!trackingEnabled) return Color.UNKNOWN;
+
+        Color s1 = slot[1];
+        Color s2 = slot[2];
+
+        if ((s1 != Color.GREEN && s1 != Color.PURPLE) ||
+                (s2 != Color.GREEN && s2 != Color.PURPLE)) {
+            return Color.UNKNOWN;
+        }
+
+        int purple = 0;
+        if (s1 == Color.PURPLE) purple++;
+        if (s2 == Color.PURPLE) purple++;
+
+        return (purple == 2) ? Color.GREEN : Color.PURPLE;
+    }
+
     // ---------------- Stability logic ----------------
 
     private Color stableColorForStation(PocketReading pr, boolean isRightStation) {
-        // No ball present -> reset stability
         if (!pr.present) {
             if (isRightStation) { rLast = Color.UNKNOWN; rStable = 0; }
             else                { lLast = Color.UNKNOWN; lStable = 0; }
             return Color.UNKNOWN;
         }
 
-        // If classifier says UNKNOWN, do not advance stability; just reset
         if (pr.colorIfPresent == Color.UNKNOWN) {
             if (isRightStation) { rLast = Color.UNKNOWN; rStable = 0; }
             else                { lLast = Color.UNKNOWN; lStable = 0; }
             return Color.UNKNOWN;
         }
 
-        // Count stable loops
         if (isRightStation) {
             if (pr.colorIfPresent == rLast) rStable++;
             else { rLast = pr.colorIfPresent; rStable = 1; }

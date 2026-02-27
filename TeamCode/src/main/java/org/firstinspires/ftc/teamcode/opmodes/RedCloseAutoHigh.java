@@ -62,17 +62,17 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     private static final Pose LAUNCH_PRELOADS_POSE = new Pose(89, 97, Math.toRadians(26.0));
 
-    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(94.568, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_P11_POSE      = new Pose(105.166, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_P12_POSE      = new Pose(109.957, 86.477, Math.toRadians(0.0));
-    private static final Pose INTAKE_G11_POSE      = new Pose(116.976, 86.477, Math.toRadians(0.0));
+    private static final Pose ALIGN_INTAKE1_POSE   = new Pose(94.568, 84.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_P11_POSE      = new Pose(105.166, 84.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_P12_POSE      = new Pose(109.957, 84.477, Math.toRadians(0.0));
+    private static final Pose INTAKE_G11_POSE      = new Pose(117.976, 84.477, Math.toRadians(0.0));
 
-    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(89, 97, Math.toRadians(39));
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(92, 97, Math.toRadians(39));
 
-    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(96.306, 65.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_P21_POSE      = new Pose(102.973, 65.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_G21_POSE      = new Pose(108.378, 63.928, Math.toRadians(0.0));
-    private static final Pose INTAKE_P22_POSE      = new Pose(116.590, 63.928, Math.toRadians(0.0));
+    private static final Pose ALIGN_INTAKE2_POSE   = new Pose(96.306, 62.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_P21_POSE      = new Pose(102.973, 62.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_G21_POSE      = new Pose(108.378, 60.928, Math.toRadians(0.0));
+    private static final Pose INTAKE_P22_POSE      = new Pose(116.590, 60.928, Math.toRadians(0.0));
 
     private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(89, 97, Math.toRadians(38.0));
 
@@ -729,17 +729,17 @@ public class RedCloseAutoHigh extends LinearOpMode {
 
     // NOTE: leaving your existing mapping exactly as provided in this file.
     private int computePreAdvanceRow1(int tid) {
-        if (tid == TID_PPG) return 0;
-        if (tid == TID_PGP) return 1;
-        if (tid == TID_GPP) return 2;
+        if (tid == TID_PPG) return 2;
+        if (tid == TID_PGP) return 0;
+        if (tid == TID_GPP) return 1;
         return 0;
     }
 
     // NOTE: leaving your existing mapping exactly as provided in this file.
     private int computePreAdvanceRow2(int tid) {
-        if (tid == TID_PPG) return 2;
-        if (tid == TID_PGP) return 0;
-        if (tid == TID_GPP) return 1;
+        if (tid == TID_PPG) return 1;
+        if (tid == TID_PGP) return 2;
+        if (tid == TID_GPP) return 0;
         return 0;
     }
 

@@ -18,58 +18,58 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Red Far", group = "Comp")
-public class CurrentRedAutoFar extends LinearOpMode {
+//@Autonomous(name = "Blue Far CYCLE", group = "Comp")
+public class BlueFarCycle extends LinearOpMode {
 
     // =========================================================
     // ===================== PATHING INFO ======================
     // =========================================================
-    // NOTE: Edit these poses/headings to tune pathing quickly.
 
     // Poses (inches, radians)
-    private static final Pose START_POSE             = new Pose(81.994,  9.021, Math.toRadians(90));
-    private static final Pose LAUNCH_PRELOADS_POSE   = new Pose(84.848, 22.663, Math.toRadians(63));
+    private static final Pose START_POSE           = new Pose(62.006,  9.021, Math.toRadians(90));
+    private static final Pose LAUNCH_PRELOADS_POSE = new Pose(59.152, 22.663, Math.toRadians(117));
 
-    // Intake 1 sequence (SLOW)  ------------------------------------------------
-    private static final Pose ALIGN_INTAKE1_POSE     = new Pose(94, 32.0, Math.toRadians(0));
-    private static final Pose INTAKE_P11_POSE        = new Pose(106.796, 32.0, Math.toRadians(0));
-    private static final Pose INTAKE_P12_POSE        = new Pose(111.611, 34.0, Math.toRadians(0));
-    private static final Pose INTAKE_G11_POSE        = new Pose(116.207, 34.0, Math.toRadians(0));
-    private static final Pose LAUNCH_FIRST_ROW_POSE  = new Pose(93, 21, Math.toRadians(68));
+    // Intake 1 (main @ y=34) --------------------------------------------
+    private static final Pose ALIGN_INTAKE1_POSE    = new Pose(50.000, 34.0, Math.toRadians(180));
+    private static final Pose INTAKE_G11_POSE       = new Pose(22.793, 35.0, Math.toRadians(180)); // your adjusted G11
+    private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(52.000, 21.000, Math.toRadians(112));
 
-    // Intake 2 sequence (FAST/NORMAL) ------------------------------------------
-    private static final Pose ALIGN_INTAKE2_POSE     = new Pose(89, 15, Math.toRadians(0));               // 360 -> 0
-    private static final Pose INTAKE_GP_POSE         = new Pose(126.546, 15.000, Math.toRadians(0));     // 360 -> 0
-    private static final Pose ALIGN_INTAKE2_POSE_2   = new Pose(125.049, 16.227, Math.toRadians(0));     // 360 -> 0
-    private static final Pose ALIGN_INTAKE2_POSE_3   = new Pose(125.031,  12.018, Math.toRadians(0));    // 360 -> 0
-    private static final Pose INTAKE_PP_POSE         = new Pose(130.325,  10.982, Math.toRadians(0));     // 360 -> 0
-    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(93, 21, Math.toRadians(68));
+    // NEW: Intake 1 (second pass @ y=10) --------------------------------
+    private static final Pose ALIGN_INTAKE1_LOW_POSE  = new Pose(50.000, 12.0, Math.toRadians(180));
+    private static final Pose INTAKE_G11_LOW_POSE     = new Pose(22.793, 10.0, Math.toRadians(180));
 
-    private static final Pose PARK_POSE              = new Pose(105.190, 15.074, Math.toRadians(90));
+    // Intake 2 sequence (main) ------------------------------------------
+    private static final Pose ALIGN_INTAKE2_POSE     = new Pose(55.000, 15.000, Math.toRadians(180));
+    private static final Pose INTAKE_GP_POSE         = new Pose(17.454, 15.000, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE2_POSE_2   = new Pose(18.951, 16.227, Math.toRadians(180));
+    private static final Pose ALIGN_INTAKE2_POSE_3   = new Pose(18.969, 12.018, Math.toRadians(180));
+    private static final Pose INTAKE_PP_POSE         = new Pose(13.675, 10.982, Math.toRadians(180));
+    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(54.000, 21.000, Math.toRadians(112));
 
-    // Heading interpolation endpoints (degrees) — easy to change
+    private static final Pose PARK_POSE              = new Pose(38.810, 15.074, Math.toRadians(90));
+
+    // Heading interpolation endpoints (degrees)
     private static final double H_START_TO_PRELOADS_START_DEG = 90;
-    private static final double H_START_TO_PRELOADS_END_DEG   = 63;
+    private static final double H_START_TO_PRELOADS_END_DEG   = 117;
 
-    // Preloads -> Align Intake 2 (FAST sequence now happens first)
-    private static final double H_PRELOADS_TO_ALIGN2_START_DEG = 63;
-    private static final double H_PRELOADS_TO_ALIGN2_END_DEG   = 0;
+    private static final double H_PRELOADS_TO_ALIGN2_START_DEG = 117;
+    private static final double H_PRELOADS_TO_ALIGN2_END_DEG   = 180;
 
-    // Launch 2 return heading (intake2 -> launch second row)
-    private static final double H_SECOND_RETURN_START_DEG      = 0;
-    private static final double H_SECOND_RETURN_END_DEG        = 71;
+    private static final double H_SECOND_RETURN_START_DEG      = 180;
+    private static final double H_SECOND_RETURN_END_DEG        = 109;
 
-    // Launch Second Row -> Align Intake 1 (SLOW sequence now happens second)
-    private static final double H_ROW2_TO_ALIGN1_START_DEG     = 71;
-    private static final double H_ROW2_TO_ALIGN1_END_DEG       = 0;
+    private static final double H_ROW2_TO_ALIGN1_START_DEG     = 109;
+    private static final double H_ROW2_TO_ALIGN1_END_DEG       = 180;
 
-    // Intake1 -> Launch First Row
-    private static final double H_ROW1_RETURN_START_DEG        = 0;
-    private static final double H_ROW1_RETURN_END_DEG          = 68;
+    private static final double H_ROW1_RETURN_START_DEG        = 180;
+    private static final double H_ROW1_RETURN_END_DEG          = 111;
 
-    // Park (now from Launch First Row, because it is the LAST launch after swapping)
-    private static final double H_PARK_START_DEG               = 68;
+    private static final double H_PARK_START_DEG               = 111;
     private static final double H_PARK_END_DEG                 = 90;
+
+    // NEW: return from Row1 launch -> AlignIntake1Low (y=12) for second intake1-like cycle
+    private static final double H_ROW1_TO_ALIGN1LOW_START_DEG   = 111;
+    private static final double H_ROW1_TO_ALIGN1LOW_END_DEG     = 180;
 
     // =========================================================
     // =================== LIMELIGHT / TAGS ====================
@@ -97,21 +97,10 @@ public class CurrentRedAutoFar extends LinearOpMode {
     // =========================================================
     // ==================== DRIVE POWER ========================
     // =========================================================
-    private static final double MAX_POWER_NORMAL = 1.0;
-
-    // Intake drive speeds:
-    // - Intake 1 (slow precision row)
-    private static final double MAX_POWER_INTAKE1 = 0.45;
-    // - Intake 2 (now first after preloads) - slow it down to 0.75 as requested
+    private static final double MAX_POWER_NORMAL  = 1.0;
     private static final double MAX_POWER_INTAKE2 = 0.75;
 
     private static final double INTAKE_SETTLE_S = 0.65;
-
-    // =========================================================
-    // ============ NEW: REVERSE CLEANUP (NON-BLOCKING) =========
-    // =========================================================
-    private static final double OUTTAKE_REVERSE_TIME_S = 1.0;
-    private static final double OUTTAKE_REVERSE_POWER  = -1.0; // reverse
 
     // =========================================================
     // ==================== DEVICES / STATE ====================
@@ -132,19 +121,15 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
     // Pre-advance sets
     private int preAdvanceRemainingPreloads = 0;
-    private int preAdvanceRemainingRow1 = 0; // (Launch First Row)
-    private int preAdvanceRemainingRow2 = 0; // (Launch Second Row)
+    private int preAdvanceRemainingRow1 = 0;
+    private int preAdvanceRemainingRow2 = 0;
 
     // Intake control
     private boolean intakeActive = false;
 
-    // NEW: timed reverse cleanup (runs while driving back to launch)
-    private boolean outtakeReverseActive = false;
-    private double outtakeReverseTimerS = 0.0;
-
-    // Intake settle timing
+    // settle / advance
     private double intakeSettleTimerS = 0.0;
-    private boolean settleAdvanceIssued = false;
+    private int intakeAdvanceRemaining = 0;
 
     // Spin-up timing
     private double spinupElapsedS = 0.0;
@@ -155,40 +140,38 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
     // Launch trigger guards
     private boolean launchPreloadsStarted = false;
-    private boolean launchRow1Started    = false;
-    private boolean launchRow2Started    = false;
+    private boolean launchRow2Started     = false;
+    private boolean launchRow1Started     = false;
+    private boolean launchRow1LowStarted  = false;
 
     private enum Phase {
         DRIVE_LAUNCH_PRELOADS,
         ARRIVED_SPINUP_PRELOADS,
         FIRE_THREE_PRELOADS,
 
-        // ===== SWAPPED ORDER =====
-        // Intake 2 (NOW FIRST) - should be 0.75 chassis power
+        // ===== Main Intake 2 + Launch Row2 =====
         DRIVE_ALIGN_INTAKE2,
         DRIVE_INTAKE_GP,
-        WAIT_SETTLE_AFTER_GP,
-        DRIVE_ALIGN_INTAKE2_2,
+        DRIVE_ALIGN2POSE2_AND_INDEX_AFTER_GP,
         DRIVE_ALIGN_INTAKE2_3,
         DRIVE_INTAKE_PP,
-        WAIT_SETTLE_AFTER_PP,
-
-        DRIVE_LAUNCH_SECOND_ROW,
+        DRIVE_LAUNCH_ROW2_AND_INDEX_AFTER_PP,
         ARRIVED_SPINUP_SECOND_ROW,
         FIRE_THREE_SECOND_ROW,
 
-        // Intake 1 (NOW SECOND) - stays at 0.45 chassis power
+        // ===== Intake 1 + Launch Row1 (main) =====
         DRIVE_ALIGN_INTAKE1,
-        DRIVE_INTAKE_P11,
-        WAIT_INDEXER_AFTER_P11,
-        DRIVE_INTAKE_P12,
-        WAIT_INDEXER_AFTER_P12,
-        DRIVE_INTAKE_G11,
-        WAIT_SETTLE_AFTER_G11,
-
-        DRIVE_LAUNCH_FIRST_ROW,
+        DRIVE_INTAKE1_SWEEP_TO_G11,
+        DRIVE_LAUNCH_ROW1_AND_PREADV_AFTER_G11,
         ARRIVED_SPINUP_FIRST_ROW,
         FIRE_THREE_FIRST_ROW,
+
+        // ===== NEW: Intake 1-like @ y=12 + Launch Row1 again =====
+        DRIVE_ALIGN_INTAKE1_LOW,
+        DRIVE_INTAKE1_LOW_SWEEP_TO_G11,
+        DRIVE_LAUNCH_ROW1_LOW_AND_PREADV_AFTER_G11,
+        ARRIVED_SPINUP_FIRST_ROW_LOW,
+        FIRE_THREE_FIRST_ROW_LOW,
 
         DRIVE_PARK,
         DONE
@@ -223,11 +206,10 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
         setDrivePowerNormal();
 
-        telemetry.addLine("Current Red Auto Far: INIT – scanning AprilTag until START (last seen wins)");
-        telemetry.addData("Default Pattern", "PPG (TID 23) if no tag seen");
-        telemetry.addData("Start Pose", poseStr(START_POSE));
-        telemetry.addData("Intake2 Chassis Power (now first)", MAX_POWER_INTAKE2);
-        telemetry.addData("Reverse Cleanup", "Enabled (1.0s reverse while driving back to launch)");
+        telemetry.addLine("Blue Far CYCLE: INIT – scanning AprilTag until START (last seen wins)");
+        telemetry.addData("No Reverse", "Intake never reverses");
+        telemetry.addData("Parallelization", "Keep driving while indexer advances");
+        telemetry.addData("NEW", "After Row1 launch, do another Intake1-style cycle at y=12 then launch again");
         telemetry.update();
 
         // ===== INIT loop: scan until START =====
@@ -250,7 +232,6 @@ public class CurrentRedAutoFar extends LinearOpMode {
                     detectedTid = tid;
                     tidToUse = tid;
                     usedFallbackPPG = false;
-
                     MotifStorage.motifTid = tidToUse;
                 }
             }
@@ -280,16 +261,14 @@ public class CurrentRedAutoFar extends LinearOpMode {
         } else {
             usedFallbackPPG = false;
         }
-
         MotifStorage.motifTid = tidToUse;
 
-        // Compute pre-advance counts
         preAdvanceRemainingPreloads = computePreAdvancePreloads(tidToUse);
 
         // FAR -> LONG speed
         flywheel.setState(Flywheel.State.LONG);
 
-        // Go to launch preloads
+        // start
         setDrivePowerNormal();
         follower.followPath(paths.LaunchPreloadsPose, true);
         phase = Phase.DRIVE_LAUNCH_PRELOADS;
@@ -298,15 +277,13 @@ public class CurrentRedAutoFar extends LinearOpMode {
             double dt = (System.nanoTime() - lastNs) / 1e9;
             lastNs = System.nanoTime();
 
-            // NEW: tick reverse cleanup (non-blocking) while we drive/operate
-            updateOuttakeReverse(dt);
-
             llVision.poll();
             flywheel.update(dt);
             indexer.update(dt);
             follower.update();
 
             switch (phase) {
+
                 // --- Launch preloads ---
                 case DRIVE_LAUNCH_PRELOADS: {
                     if (preAdvanceRemainingPreloads > 0
@@ -342,8 +319,7 @@ public class CurrentRedAutoFar extends LinearOpMode {
                         launchPreloadsStarted = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // ===== go to Intake 2 FIRST =====
-                        setDrivePowerIntake2();   // 0.75
+                        setDrivePowerIntake2();
                         follower.followPath(paths.AlignIntake2Pose, true);
                         phase = Phase.DRIVE_ALIGN_INTAKE2;
                     }
@@ -351,11 +327,11 @@ public class CurrentRedAutoFar extends LinearOpMode {
                 }
 
                 // =========================================================
-                // ===== Intake 2 (NOW FIRST) - chassis at 0.75 =============
+                // ===== Main Intake 2 + Launch Row2 ========================
                 // =========================================================
                 case DRIVE_ALIGN_INTAKE2: {
                     if (!follower.isBusy()) {
-                        setDrivePowerIntake2(); // 0.75
+                        setDrivePowerIntake2();
                         intakeStart();
                         follower.followPath(paths.IntakeGPPose, true);
                         phase = Phase.DRIVE_INTAKE_GP;
@@ -366,40 +342,32 @@ public class CurrentRedAutoFar extends LinearOpMode {
                 case DRIVE_INTAKE_GP: {
                     if (!follower.isBusy()) {
                         intakeSettleTimerS = 0.0;
-                        settleAdvanceIssued = false;
-                        phase = Phase.WAIT_SETTLE_AFTER_GP;
+                        intakeAdvanceRemaining = 2;
+
+                        setDrivePowerIntake2();
+                        follower.followPath(paths.AlignIntake2Pose2, true);
+
+                        phase = Phase.DRIVE_ALIGN2POSE2_AND_INDEX_AFTER_GP;
                     }
                     break;
                 }
 
-                case WAIT_SETTLE_AFTER_GP: {
+                case DRIVE_ALIGN2POSE2_AND_INDEX_AFTER_GP: {
                     intakeSettleTimerS += dt;
 
-                    if (!settleAdvanceIssued
-                            && intakeSettleTimerS >= INTAKE_SETTLE_S
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        indexer.startIntakeAdvanceOneSlot();
-                        settleAdvanceIssued = true;
+                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
+                        if (intakeAdvanceRemaining > 0
+                                && !indexer.isAutoRunning()
+                                && !indexer.isMoving()
+                                && !indexer.isPreAdvancing()
+                                && !indexer.isIntakeAdvancing()) {
+                            indexer.startIntakeAdvanceOneSlot();
+                            intakeAdvanceRemaining--;
+                        }
                     }
 
-                    if (settleAdvanceIssued
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        setDrivePowerIntake2(); // 0.75
-                        follower.followPath(paths.AlignIntake2Pose2, true);
-                        phase = Phase.DRIVE_ALIGN_INTAKE2_2;
-                    }
-                    break;
-                }
-
-                case DRIVE_ALIGN_INTAKE2_2: {
                     if (!follower.isBusy()) {
-                        setDrivePowerIntake2(); // 0.75
+                        setDrivePowerIntake2();
                         follower.followPath(paths.AlignIntake2Pose3, true);
                         phase = Phase.DRIVE_ALIGN_INTAKE2_3;
                     }
@@ -408,7 +376,7 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
                 case DRIVE_ALIGN_INTAKE2_3: {
                     if (!follower.isBusy()) {
-                        setDrivePowerIntake2(); // 0.75
+                        setDrivePowerIntake2();
                         follower.followPath(paths.IntakePPPose, true);
                         phase = Phase.DRIVE_INTAKE_PP;
                     }
@@ -418,45 +386,32 @@ public class CurrentRedAutoFar extends LinearOpMode {
                 case DRIVE_INTAKE_PP: {
                     if (!follower.isBusy()) {
                         intakeSettleTimerS = 0.0;
-                        settleAdvanceIssued = false;
-                        phase = Phase.WAIT_SETTLE_AFTER_PP;
-                    }
-                    break;
-                }
-
-                case WAIT_SETTLE_AFTER_PP: {
-                    intakeSettleTimerS += dt;
-
-                    if (!settleAdvanceIssued
-                            && intakeSettleTimerS >= INTAKE_SETTLE_S
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        indexer.startIntakeAdvanceOneSlot();
-                        settleAdvanceIssued = true;
-                    }
-
-                    if (settleAdvanceIssued
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-
-                        // NEW: reverse for 1s while driving back to Launch Second Row (do NOT block)
-                        startOuttakeReverse();
+                        intakeAdvanceRemaining = 1;
 
                         preAdvanceRemainingRow2 = computePreAdvanceRow2(tidToUse);
 
-                        setDrivePowerNormal(); // shooting travel can stay full
+                        setDrivePowerNormal();
                         follower.followPath(paths.LaunchSecondRowPose, true);
-                        phase = Phase.DRIVE_LAUNCH_SECOND_ROW;
+
+                        phase = Phase.DRIVE_LAUNCH_ROW2_AND_INDEX_AFTER_PP;
                     }
                     break;
                 }
 
-                // --- Launch Row 2 (FIRST) ---
-                case DRIVE_LAUNCH_SECOND_ROW: {
+                case DRIVE_LAUNCH_ROW2_AND_INDEX_AFTER_PP: {
+                    intakeSettleTimerS += dt;
+
+                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
+                        if (intakeAdvanceRemaining > 0
+                                && !indexer.isAutoRunning()
+                                && !indexer.isMoving()
+                                && !indexer.isPreAdvancing()
+                                && !indexer.isIntakeAdvancing()) {
+                            indexer.startIntakeAdvanceOneSlot();
+                            intakeAdvanceRemaining--;
+                        }
+                    }
+
                     if (preAdvanceRemainingRow2 > 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
@@ -467,9 +422,14 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
                     if (!follower.isBusy()
                             && preAdvanceRemainingRow2 == 0
+                            && intakeAdvanceRemaining == 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
-                            && !indexer.isPreAdvancing()) {
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+
+                        intakeStop(); // stop before shooting (no reverse)
+
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_SECOND_ROW;
                     }
@@ -490,7 +450,6 @@ public class CurrentRedAutoFar extends LinearOpMode {
                         launchRow2Started = true;
                     }
                     if (!indexer.isAutoRunning()) {
-                        // ===== now go to Intake 1 SECOND =====
                         setDrivePowerNormal();
                         follower.followPath(paths.AlignIntake1Pose, true);
                         phase = Phase.DRIVE_ALIGN_INTAKE1;
@@ -499,110 +458,48 @@ public class CurrentRedAutoFar extends LinearOpMode {
                 }
 
                 // =========================================================
-                // ===== Intake 1 (NOW SECOND) - chassis at 0.45 ============
+                // ===== Intake 1 + Launch Row1 (main) ======================
                 // =========================================================
                 case DRIVE_ALIGN_INTAKE1: {
                     if (!follower.isBusy()) {
-                        setDrivePowerIntake1(); // 0.45
+                        setDrivePowerNormal();
                         intakeStart();
-                        follower.followPath(paths.IntakeP11Pose, true);
-                        phase = Phase.DRIVE_INTAKE_P11;
+
+                        follower.followPath(paths.Intake1SweepToG11Pose, true);
+                        phase = Phase.DRIVE_INTAKE1_SWEEP_TO_G11;
                     }
                     break;
                 }
 
-                case DRIVE_INTAKE_P11: {
+                case DRIVE_INTAKE1_SWEEP_TO_G11: {
                     if (!follower.isBusy()) {
                         intakeSettleTimerS = 0.0;
-                        settleAdvanceIssued = false;
-                        phase = Phase.WAIT_INDEXER_AFTER_P11;
-                    }
-                    break;
-                }
-
-                case WAIT_INDEXER_AFTER_P11: {
-                    intakeSettleTimerS += dt;
-
-                    if (!settleAdvanceIssued
-                            && intakeSettleTimerS >= INTAKE_SETTLE_S
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        indexer.startIntakeAdvanceOneSlot();
-                        settleAdvanceIssued = true;
-                    }
-
-                    if (settleAdvanceIssued
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        follower.followPath(paths.IntakeP12Pose, true);
-                        phase = Phase.DRIVE_INTAKE_P12;
-                    }
-                    break;
-                }
-
-                case DRIVE_INTAKE_P12: {
-                    if (!follower.isBusy()) {
-                        intakeSettleTimerS = 0.0;
-                        settleAdvanceIssued = false;
-                        phase = Phase.WAIT_INDEXER_AFTER_P12;
-                    }
-                    break;
-                }
-
-                case WAIT_INDEXER_AFTER_P12: {
-                    intakeSettleTimerS += dt;
-
-                    if (!settleAdvanceIssued
-                            && intakeSettleTimerS >= INTAKE_SETTLE_S
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        indexer.startIntakeAdvanceOneSlot();
-                        settleAdvanceIssued = true;
-                    }
-
-                    if (settleAdvanceIssued
-                            && !indexer.isAutoRunning()
-                            && !indexer.isMoving()
-                            && !indexer.isPreAdvancing()
-                            && !indexer.isIntakeAdvancing()) {
-                        follower.followPath(paths.IntakeG11Pose, true);
-                        phase = Phase.DRIVE_INTAKE_G11;
-                    }
-                    break;
-                }
-
-                case DRIVE_INTAKE_G11: {
-                    if (!follower.isBusy()) {
-                        intakeSettleTimerS = 0.0;
-                        phase = Phase.WAIT_SETTLE_AFTER_G11;
-                    }
-                    break;
-                }
-
-                case WAIT_SETTLE_AFTER_G11: {
-                    intakeSettleTimerS += dt;
-
-                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
-                        // NEW: reverse for 1s while driving back to Launch First Row (do NOT block)
-                        startOuttakeReverse();
+                        intakeAdvanceRemaining = 2; // pre-advance count after G11
 
                         preAdvanceRemainingRow1 = computePreAdvanceRow1(tidToUse);
 
                         setDrivePowerNormal();
                         follower.followPath(paths.LaunchFirstRowPose, true);
-                        phase = Phase.DRIVE_LAUNCH_FIRST_ROW;
+
+                        phase = Phase.DRIVE_LAUNCH_ROW1_AND_PREADV_AFTER_G11;
                     }
                     break;
                 }
 
-                // --- Launch Row 1 (LAST) ---
-                case DRIVE_LAUNCH_FIRST_ROW: {
+                case DRIVE_LAUNCH_ROW1_AND_PREADV_AFTER_G11: {
+                    intakeSettleTimerS += dt;
+
+                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
+                        if (intakeAdvanceRemaining > 0
+                                && !indexer.isAutoRunning()
+                                && !indexer.isMoving()
+                                && !indexer.isPreAdvancing()
+                                && !indexer.isIntakeAdvancing()) {
+                            indexer.startPreAdvanceOneSlot();
+                            intakeAdvanceRemaining--;
+                        }
+                    }
+
                     if (preAdvanceRemainingRow1 > 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
@@ -612,10 +509,15 @@ public class CurrentRedAutoFar extends LinearOpMode {
                     }
 
                     if (!follower.isBusy()
+                            && intakeAdvanceRemaining == 0
                             && preAdvanceRemainingRow1 == 0
                             && !indexer.isMoving()
                             && !indexer.isAutoRunning()
-                            && !indexer.isPreAdvancing()) {
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+
+                        intakeStop();
+
                         spinupElapsedS = 0.0;
                         phase = Phase.ARRIVED_SPINUP_FIRST_ROW;
                     }
@@ -635,6 +537,97 @@ public class CurrentRedAutoFar extends LinearOpMode {
                         indexer.startAutoLaunchAllThree();
                         launchRow1Started = true;
                     }
+
+                    if (!indexer.isAutoRunning()) {
+                        // NEW: go do the y=12 intake1-like sequence
+                        setDrivePowerNormal();
+                        follower.followPath(paths.ReturnToAlignIntake1LowPose, true);
+                        phase = Phase.DRIVE_ALIGN_INTAKE1_LOW;
+                    }
+                    break;
+                }
+
+                // =========================================================
+                // ===== NEW Intake 1-like @ y=12 + Launch Row1 again =======
+                // =========================================================
+                case DRIVE_ALIGN_INTAKE1_LOW: {
+                    if (!follower.isBusy()) {
+                        setDrivePowerNormal();
+                        intakeStart();
+
+                        follower.followPath(paths.Intake1LowSweepToG11Pose, true);
+                        phase = Phase.DRIVE_INTAKE1_LOW_SWEEP_TO_G11;
+                    }
+                    break;
+                }
+
+                case DRIVE_INTAKE1_LOW_SWEEP_TO_G11: {
+                    if (!follower.isBusy()) {
+                        intakeSettleTimerS = 0.0;
+                        intakeAdvanceRemaining = 2; // pre-advance count after low G11
+
+                        preAdvanceRemainingRow1 = computePreAdvanceRow1(tidToUse);
+
+                        setDrivePowerNormal();
+                        follower.followPath(paths.LaunchFirstRowFromLowPose, true);
+
+                        phase = Phase.DRIVE_LAUNCH_ROW1_LOW_AND_PREADV_AFTER_G11;
+                    }
+                    break;
+                }
+
+                case DRIVE_LAUNCH_ROW1_LOW_AND_PREADV_AFTER_G11: {
+                    intakeSettleTimerS += dt;
+
+                    if (intakeSettleTimerS >= INTAKE_SETTLE_S) {
+                        if (intakeAdvanceRemaining > 0
+                                && !indexer.isAutoRunning()
+                                && !indexer.isMoving()
+                                && !indexer.isPreAdvancing()
+                                && !indexer.isIntakeAdvancing()) {
+                            indexer.startPreAdvanceOneSlot();
+                            intakeAdvanceRemaining--;
+                        }
+                    }
+
+                    if (preAdvanceRemainingRow1 > 0
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()) {
+                        indexer.startPreAdvanceOneSlot();
+                        preAdvanceRemainingRow1--;
+                    }
+
+                    if (!follower.isBusy()
+                            && intakeAdvanceRemaining == 0
+                            && preAdvanceRemainingRow1 == 0
+                            && !indexer.isMoving()
+                            && !indexer.isAutoRunning()
+                            && !indexer.isPreAdvancing()
+                            && !indexer.isIntakeAdvancing()) {
+
+                        intakeStop();
+
+                        spinupElapsedS = 0.0;
+                        phase = Phase.ARRIVED_SPINUP_FIRST_ROW_LOW;
+                    }
+                    break;
+                }
+
+                case ARRIVED_SPINUP_FIRST_ROW_LOW: {
+                    spinupElapsedS += dt;
+                    if (flywheelReady() || spinupElapsedS >= SPINUP_TIMEOUT_S) {
+                        phase = Phase.FIRE_THREE_FIRST_ROW_LOW;
+                    }
+                    break;
+                }
+
+                case FIRE_THREE_FIRST_ROW_LOW: {
+                    if (!launchRow1LowStarted) {
+                        indexer.startAutoLaunchAllThree();
+                        launchRow1LowStarted = true;
+                    }
+
                     if (!indexer.isAutoRunning()) {
                         setDrivePowerNormal();
                         follower.followPath(paths.ParkPose, true);
@@ -656,32 +649,16 @@ public class CurrentRedAutoFar extends LinearOpMode {
             }
 
             telemetry.addData("Phase", phase);
-            telemetry.addData("ActivePipe", activePipeline);
-            telemetry.addData("Detected TID (INIT)", detectedTid);
             telemetry.addData("Using TID", tidToUse);
-            telemetry.addData("Fallback PPG?", usedFallbackPPG);
-
             telemetry.addData("FW Target RPM", "%.0f", flywheel.getTargetRpm());
             telemetry.addData("FW Right RPM", "%.0f", flywheel.getMeasuredRightRpm());
             telemetry.addData("FW Left RPM", "%.0f", flywheel.getMeasuredLeftRpm());
-            telemetry.addData("Hood pos", "%.2f", flywheel.getHoodPosition());
-
-            telemetry.addData("Spinup Elapsed (s)", "%.2f", spinupElapsedS);
-
-            telemetry.addData("Preloads pre-adv rem", preAdvanceRemainingPreloads);
-            telemetry.addData("Row2 pre-adv rem", preAdvanceRemainingRow2);
-            telemetry.addData("Row1 pre-adv rem", preAdvanceRemainingRow1);
-
             telemetry.addData("Indexer Auto", indexer.isAutoRunning());
             telemetry.addData("Indexer Moving", indexer.isMoving());
             telemetry.addData("Indexer PreAdv", indexer.isPreAdvancing());
             telemetry.addData("Indexer IntakeAdv", indexer.isIntakeAdvancing());
-
             telemetry.addData("Intake Active", intakeActive);
-            telemetry.addData("OuttakeReverse", outtakeReverseActive);
-            telemetry.addData("OuttakeTimer", "%.2f", outtakeReverseTimerS);
-            telemetry.addData("Intake Settle (s)", "%.2f", intakeSettleTimerS);
-
+            telemetry.addData("AdvRemaining", intakeAdvanceRemaining);
             telemetry.addData("Pose", poseStr(follower.getPose()));
             telemetry.update();
         }
@@ -695,7 +672,6 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
     // ===== Drive power helpers =====
     private void setDrivePowerNormal()  { follower.setMaxPower(MAX_POWER_NORMAL); }
-    private void setDrivePowerIntake1() { follower.setMaxPower(MAX_POWER_INTAKE1); }
     private void setDrivePowerIntake2() { follower.setMaxPower(MAX_POWER_INTAKE2); }
 
     // ===== Helpers =====
@@ -707,45 +683,13 @@ public class CurrentRedAutoFar extends LinearOpMode {
     }
 
     private void intakeStart() {
-        // cancel any reverse cleanup
-        outtakeReverseActive = false;
-        outtakeReverseTimerS = 0.0;
-
         intakeActive = true;
         intakeMotor.setPower(1.0);
     }
 
     private void intakeStop() {
-        // hard stop cancels reverse too
-        outtakeReverseActive = false;
-        outtakeReverseTimerS = 0.0;
-
         intakeActive = false;
         intakeMotor.setPower(0.0);
-    }
-
-    // NEW: start timed reverse cleanup (non-blocking)
-    private void startOuttakeReverse() {
-        outtakeReverseActive = true;
-        outtakeReverseTimerS = 0.0;
-
-        intakeActive = false;
-        intakeMotor.setPower(OUTTAKE_REVERSE_POWER);
-    }
-
-    // NEW: tick reverse cleanup while pathing
-    private void updateOuttakeReverse(double dt) {
-        if (!outtakeReverseActive) return;
-
-        outtakeReverseTimerS += dt;
-        if (outtakeReverseTimerS >= OUTTAKE_REVERSE_TIME_S) {
-            outtakeReverseActive = false;
-            outtakeReverseTimerS = 0.0;
-
-            if (!intakeActive) {
-                intakeMotor.setPower(0.0);
-            }
-        }
     }
 
     // Preloads mapping: PPG → 0, PGP → 1, GPP → 2
@@ -757,16 +701,16 @@ public class CurrentRedAutoFar extends LinearOpMode {
     }
 
     private int computePreAdvanceRow1(int tid) {
-        if (tid == TID_PPG) return 0;
-        if (tid == TID_PGP) return 1;
-        if (tid == TID_GPP) return 2;
+        if (tid == TID_PPG) return 1;
+        if (tid == TID_PGP) return 2;
+        if (tid == TID_GPP) return 0;
         return 0;
     }
 
     private int computePreAdvanceRow2(int tid) {
-        if (tid == TID_PPG) return 1;
-        if (tid == TID_PGP) return 2;
-        if (tid == TID_GPP) return 0;
+        if (tid == TID_PPG) return 2;
+        if (tid == TID_PGP) return 0;
+        if (tid == TID_GPP) return 1;
         return 0;
     }
 
@@ -781,7 +725,7 @@ public class CurrentRedAutoFar extends LinearOpMode {
     public static class Paths {
         public PathChain LaunchPreloadsPose;
 
-        // Intake2 FIRST
+        // Intake2
         public PathChain AlignIntake2Pose;
         public PathChain IntakeGPPose;
         public PathChain AlignIntake2Pose2;
@@ -789,12 +733,15 @@ public class CurrentRedAutoFar extends LinearOpMode {
         public PathChain IntakePPPose;
         public PathChain LaunchSecondRowPose;
 
-        // Intake1 SECOND
+        // Intake1 main
         public PathChain AlignIntake1Pose;
-        public PathChain IntakeP11Pose;
-        public PathChain IntakeP12Pose;
-        public PathChain IntakeG11Pose;
+        public PathChain Intake1SweepToG11Pose;
         public PathChain LaunchFirstRowPose;
+
+        // NEW: Intake1 low
+        public PathChain ReturnToAlignIntake1LowPose;
+        public PathChain Intake1LowSweepToG11Pose;
+        public PathChain LaunchFirstRowFromLowPose;
 
         public PathChain ParkPose;
 
@@ -816,22 +763,22 @@ public class CurrentRedAutoFar extends LinearOpMode {
 
             IntakeGPPose = follower.pathBuilder()
                     .addPath(new BezierLine(ALIGN_INTAKE2_POSE, INTAKE_GP_POSE))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                    .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                     .build();
 
             AlignIntake2Pose2 = follower.pathBuilder()
                     .addPath(new BezierLine(INTAKE_GP_POSE, ALIGN_INTAKE2_POSE_2))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                    .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                     .build();
 
             AlignIntake2Pose3 = follower.pathBuilder()
                     .addPath(new BezierLine(ALIGN_INTAKE2_POSE_2, ALIGN_INTAKE2_POSE_3))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                    .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                     .build();
 
             IntakePPPose = follower.pathBuilder()
                     .addPath(new BezierLine(ALIGN_INTAKE2_POSE_3, INTAKE_PP_POSE))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                    .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                     .build();
 
             LaunchSecondRowPose = follower.pathBuilder()
@@ -848,23 +795,35 @@ public class CurrentRedAutoFar extends LinearOpMode {
                             Math.toRadians(H_ROW2_TO_ALIGN1_END_DEG))
                     .build();
 
-            IntakeP11Pose = follower.pathBuilder()
-                    .addPath(new BezierLine(ALIGN_INTAKE1_POSE, INTAKE_P11_POSE))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                    .build();
-
-            IntakeP12Pose = follower.pathBuilder()
-                    .addPath(new BezierLine(INTAKE_P11_POSE, INTAKE_P12_POSE))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                    .build();
-
-            IntakeG11Pose = follower.pathBuilder()
-                    .addPath(new BezierLine(INTAKE_P12_POSE, INTAKE_G11_POSE))
-                    .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+            Intake1SweepToG11Pose = follower.pathBuilder()
+                    .addPath(new BezierLine(ALIGN_INTAKE1_POSE, INTAKE_G11_POSE))
+                    .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                     .build();
 
             LaunchFirstRowPose = follower.pathBuilder()
                     .addPath(new BezierLine(INTAKE_G11_POSE, LAUNCH_FIRST_ROW_POSE))
+                    .setLinearHeadingInterpolation(
+                            Math.toRadians(H_ROW1_RETURN_START_DEG),
+                            Math.toRadians(H_ROW1_RETURN_END_DEG))
+                    .build();
+
+            // NEW: from Row1 launch pose -> AlignIntake1Low (y=12)
+            ReturnToAlignIntake1LowPose = follower.pathBuilder()
+                    .addPath(new BezierLine(LAUNCH_FIRST_ROW_POSE, ALIGN_INTAKE1_LOW_POSE))
+                    .setLinearHeadingInterpolation(
+                            Math.toRadians(H_ROW1_TO_ALIGN1LOW_START_DEG),
+                            Math.toRadians(H_ROW1_TO_ALIGN1LOW_END_DEG))
+                    .build();
+
+            // NEW: low sweep
+            Intake1LowSweepToG11Pose = follower.pathBuilder()
+                    .addPath(new BezierLine(ALIGN_INTAKE1_LOW_POSE, INTAKE_G11_LOW_POSE))
+                    .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                    .build();
+
+            // NEW: launch from low G11 back to same Row1 launch pose
+            LaunchFirstRowFromLowPose = follower.pathBuilder()
+                    .addPath(new BezierLine(INTAKE_G11_LOW_POSE, LAUNCH_FIRST_ROW_POSE))
                     .setLinearHeadingInterpolation(
                             Math.toRadians(H_ROW1_RETURN_START_DEG),
                             Math.toRadians(H_ROW1_RETURN_END_DEG))

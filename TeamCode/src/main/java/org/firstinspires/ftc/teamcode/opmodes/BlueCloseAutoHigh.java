@@ -83,10 +83,10 @@ public class BlueCloseAutoHigh extends LinearOpMode {
     private static final Pose INTAKE_P22_POSE      = new Pose(27.410, 62.928, Math.toRadians(180));
 
     // Launch pose for second row
-    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(52.046, 98.182, Math.toRadians(142));
+    private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(52.046, 98.182, Math.toRadians(144));
 
     // Final park
-    private static final Pose PARK_POSE = new Pose(32.568, 75.475, Math.toRadians(180));
+    private static final Pose PARK_POSE = new Pose(34.568, 75.475, Math.toRadians(180));
 
     // ===== Devices =====
     private Limelight3A limelight;

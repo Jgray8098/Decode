@@ -1,3 +1,6 @@
+// ==================================
+// ColorSensorTele.java (UPDATED - FIXED RB2 SORT)
+// ==================================
 package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -19,7 +22,6 @@ import org.firstinspires.ftc.teamcode.mechanism.Indexer;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
 
-// NEW: artifact tracking + motif storage
 import org.firstinspires.ftc.teamcode.control.ArtifactTracker;
 import org.firstinspires.ftc.teamcode.control.MotifStorage;
 
@@ -27,42 +29,31 @@ import org.firstinspires.ftc.teamcode.control.MotifStorage;
 public class ColorSensorTele extends OpMode {
     private final MecanumDrive drive = new MecanumDrive();
 
-    // Tag IDs
     private static final int BLUE_GOAL_TID = 20;
     private static final int RED_GOAL_TID  = 24;
 
     private static final int MAX_PIPE_SLOT = 9;
 
-    // ===== Heading lock tx setpoints =====
     private static final double TX_SETPOINT_CLOSE = 0.0;
     private static final double TX_SETPOINT_BLUE_LONG = +2;
     private static final double TX_SETPOINT_RED_LONG  = -2;
 
-    // =========================
-    // ===== AUTO-NAV TARGETS ===
-    // =========================
-    // Pedro coords (inches, heading radians)
     private static final Pose FAR_LAUNCH_RED_POSE  = new Pose(75, 39, Math.toRadians(68));
     private static final Pose FAR_LAUNCH_BLUE_POSE = new Pose(73, 39, Math.toRadians(106));
 
-    // Cancel auto-nav if driver moves sticks beyond this
     private static final double CANCEL_STICK_THRESH = 0.12;
 
-    // Indexer step delay defaults
     private static final double INDEXER_STEP_DELAY_NORMAL = 0.15;
-    private static final double INDEXER_STEP_DELAY_CONTINUOUS = 0.0; // try to eliminate dwell between steps
 
     private Limelight3A limelight;
     private LimelightVisionFtc llVision;
     private HeadingLockController lockCtrl;
 
-    // Alliance/pipe selection
     private int selectedTid;
     private int selectedPipe;
     private int bluePipe = 0;
     private int redPipe  = 1;
 
-    // Edge tracking
     private boolean prevRB1 = false;
     private boolean prevDL1 = false;
     private boolean prevDR1 = false;
@@ -71,21 +62,16 @@ public class ColorSensorTele extends OpMode {
 
     private DcMotor intakeMotor;
 
-    // Indexer
     private Indexer indexer;
     private boolean prevLB2 = false;
-    private boolean prevRB2 = false; // AUTO-SORT
+    private boolean prevRB2 = false;
     private boolean prevB2  = false;
     private boolean jogMode = false;
     private boolean prevPS2 = false;
-    private boolean prevX2  = false; // CAM TOGGLE (currently commented)
 
     private Flywheel flywheel;
     private boolean prevUp2 = false, prevDown2 = false;
 
-    // =========================
-    // ===== PEDRO AUTO-NAV =====
-    // =========================
     private Follower follower;
     private boolean autoNavActive = false;
     private boolean prevY1 = false;
@@ -93,31 +79,20 @@ public class ColorSensorTele extends OpMode {
     @SuppressWarnings("unused")
     private PathChain autoNavPath = null;
 
-    // Keep a guaranteed-non-null pose we can fall back to
     private Pose safePose = new Pose(0, 0, 0);
 
-    // =========================
-    // ===== ARTIFACT TRACKING ==
-    // =========================
     private RevColorSensorV3 colorSensorFrontR, colorSensorBackR, colorSensorFrontL, colorSensorBackL;
     private ArtifactTracker artifactTracker;
 
-    // When we run auto-launch (3 shots), we reset tracker to EMPTY after it finishes
     private boolean resetAfterLaunchPending = false;
     private boolean prevIndexerAutoRunning = false;
 
-    // When we advance one slot, rotate tracker AFTER the move completes
     private boolean advancePending = false;
-
-    // true if the pending advance was started via startPreAdvanceOneSlot()
     private boolean advanceWasPre = false;
 
-    // ===== LB2: continuous 2-slot pre-advance (no dwell between steps) =====
     private int manualPreAdvanceRemaining = 0;
     private boolean manualPreAdvanceActive = false;
-    private double savedIndexerStepDelay = INDEXER_STEP_DELAY_NORMAL;
 
-    // Auto-sort state machine (RB2)
     private boolean sortActive = false;
     private int sortStepsRemaining = 0;
 
@@ -125,7 +100,6 @@ public class ColorSensorTele extends OpMode {
     public void init() {
         drive.init(hardwareMap);
 
-        // ---------- Pedro follower ----------
         follower = Constants.createFollower(hardwareMap);
 
         Pose startPose = (PoseStorage.lastPose != null) ? PoseStorage.lastPose : new Pose(0, 0, 0);
@@ -137,7 +111,6 @@ public class ColorSensorTele extends OpMode {
         follower.setTeleOpDrive(0, 0, 0, true);
         follower.update();
 
-        // ---------- Limelight ----------
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
         llVision = new LimelightVisionFtc(limelight);
 
@@ -157,7 +130,6 @@ public class ColorSensorTele extends OpMode {
         intakeMotor = hardwareMap.get(DcMotor.class, "intakeMotor");
         intakeMotor.setDirection(DcMotor.Direction.FORWARD);
 
-        // ---------- Indexer ----------
         indexer = new Indexer(
                 "Indexer",
                 "camServo",
@@ -171,13 +143,11 @@ public class ColorSensorTele extends OpMode {
         indexer.init(hardwareMap);
         indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
 
-        // ---------- Flywheel ----------
         flywheel = new Flywheel("flywheelRight", "flywheelLeft", "hoodServo");
         flywheel.init(hardwareMap);
         flywheel.setHoodStartPos(0.00);
         flywheel.setHoodPositions(0.15, 0.40);
 
-        // ---------- Color Sensors + Artifact Tracker ----------
         colorSensorFrontR = hardwareMap.get(RevColorSensorV3.class, "colorSensorFrontR");
         colorSensorBackR  = hardwareMap.get(RevColorSensorV3.class, "colorSensorBackR");
         colorSensorFrontL = hardwareMap.get(RevColorSensorV3.class, "colorSensorFrontL");
@@ -186,20 +156,14 @@ public class ColorSensorTele extends OpMode {
         artifactTracker = new ArtifactTracker(
                 colorSensorFrontR, colorSensorBackR,
                 colorSensorFrontL, colorSensorBackL,
-                16,      // gain
-                0.06f,   // MIN_BRIGHTNESS_SUM
-                0.08f,   // BALL_PRESENT_SUM
-                -0.20f,  // PURPLE_SCORE_MAX
-                -0.05f   // GREEN_SCORE_MIN
+                16,
+                0.06f,
+                0.08f,
+                -0.20f,
+                -0.05f
         );
 
-        telemetry.addLine("[G1] LB=Hold Align, RB=Toggle Goal (BLUE↔RED)");
-        telemetry.addLine("[G1] DPad L/R = change pipeline for SELECTED goal (wrap 0..9)");
-        telemetry.addLine("[G1] Y = AUTO-NAV to FAR LAUNCH pose (cancel by moving sticks)");
-        telemetry.addLine("[G1] B = Cancel AUTO-NAV");
-        telemetry.addLine("[G2] B = Auto launch 3 (after it completes, tracker assumes indexer EMPTY)");
-        telemetry.addLine("[G2] LB = Pre-advance TWO slots CONTINUOUS (pre-advance speed, minimal dwell)");
-        telemetry.addLine("[G2] RB = AUTO SORT (uses PreAdvance to reduce jam-ups when sorting)");
+        telemetry.addLine("[G2] RB = AUTO SORT (uses slots 1&2 + inferred slot3)");
         telemetry.addData("MotifTid (from Auto)", MotifStorage.motifTid);
     }
 
@@ -241,7 +205,6 @@ public class ColorSensorTele extends OpMode {
         follower.startTeleopDrive();
         follower.setTeleOpDrive(0, 0, 0, true);
 
-        // We do NOT assume empty at TeleOp start. We start tracking only after a launch completes.
         resetAfterLaunchPending = false;
         prevIndexerAutoRunning = indexer.isAutoRunning();
 
@@ -250,8 +213,6 @@ public class ColorSensorTele extends OpMode {
 
         manualPreAdvanceRemaining = 0;
         manualPreAdvanceActive = false;
-        savedIndexerStepDelay = INDEXER_STEP_DELAY_NORMAL;
-        indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
 
         sortActive = false;
         sortStepsRemaining = 0;
@@ -265,11 +226,9 @@ public class ColorSensorTele extends OpMode {
         double dt = (now - lastNs) / 1e9;
         lastNs = now;
 
-        // ===== Alliance toggle + pipeline slot adjust (G1) =====
         handleAlliancePipelineControls();
         pushVisionConfig();
 
-        // ---------- Flywheel toggles ----------
         boolean up2 = gamepad2.dpad_up;
         boolean down2 = gamepad2.dpad_down;
         if (up2 && !prevUp2) flywheel.toggleClose();
@@ -282,7 +241,6 @@ public class ColorSensorTele extends OpMode {
 
         boolean flywheelActive = flywheel.getTargetRpm() > 0.0;
 
-        // ---------- AUTO-NAV TRIGGER / CANCEL ----------
         boolean y1 = gamepad1.y;
         if (y1 && !prevY1 && !autoNavActive) startAutoNavToFarLaunch();
         prevY1 = y1;
@@ -293,14 +251,12 @@ public class ColorSensorTele extends OpMode {
 
         if (autoNavActive && driverIsCommandingSticks()) cancelAutoNav();
 
-        // ---------- PEDRO UPDATE ----------
         if (!autoNavActive) follower.setTeleOpDrive(0, 0, 0, true);
         follower.update();
 
         Pose pNow = follower.getPose();
         if (pNow != null) safePose = pNow;
 
-        // ---------- DRIVE CONTROL ----------
         if (autoNavActive) {
             if (!follower.isBusy()) cancelAutoNav();
         } else {
@@ -314,13 +270,11 @@ public class ColorSensorTele extends OpMode {
             drive.drive(forward, right, omega);
         }
 
-        // ---------- INTAKE ----------
         double intakePower = 0.0;
         if (gamepad2.y)      intakePower = 1.0;
         else if (gamepad2.a) intakePower = -1.0;
         intakeMotor.setPower(intakePower);
 
-        // ---------- INDEXER: JOG MODE ----------
         boolean ps2 = gamepad2.ps;
         if (ps2 && !prevPS2) {
             jogMode = !jogMode;
@@ -338,7 +292,8 @@ public class ColorSensorTele extends OpMode {
 
         // ---------- AUTO-LAUNCH (B2) ----------
         boolean b2 = gamepad2.b;
-        if (b2 && !prevB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving() && !sortActive && !manualPreAdvanceActive) {
+        if (b2 && !prevB2 && flywheelActive && !indexer.isAutoRunning() && !indexer.isMoving()
+                && !sortActive && !manualPreAdvanceActive) {
             indexer.startAutoLaunchAllThreeContinuous();
             resetAfterLaunchPending = true;
         }
@@ -358,42 +313,52 @@ public class ColorSensorTele extends OpMode {
             manualPreAdvanceActive = true;
             manualPreAdvanceRemaining = 2;
 
-            // eliminate dwell while we chain the two steps
-            savedIndexerStepDelay = INDEXER_STEP_DELAY_NORMAL;
-            indexer.setStepDelay(INDEXER_STEP_DELAY_CONTINUOUS);
-
-            // start step #1 immediately
-            indexer.startPreAdvanceOneSlot();
-            manualPreAdvanceRemaining--;
+            indexer.startPreAdvanceSlots(2);
 
             advancePending = true;
             advanceWasPre = true;
         }
         prevLB2 = lb2;
 
-        // ---------- AUTO SORT (RB2) ----------
+        // ---------- INDEXER UPDATE ----------
+        indexer.update(dt);
+
+        // =========================================================
+        // FIX #1: Update tracker BEFORE RB2 edge logic
+        // =========================================================
+        artifactTracker.update();
+
+        // =========================================================
+        // AUTO SORT (RB2) uses slots 1&2 + inferred slot3
+        // =========================================================
         boolean rb2 = gamepad2.right_bumper;
-        if (rb2 && !prevRB2 && !indexer.isAutoRunning() && !indexer.isMoving()
-                && !sortActive && !advancePending && !indexer.isPreAdvancing()
+        if (rb2 && !prevRB2
+                && !indexer.isAutoRunning()
+                && !indexer.isMoving()
+                && !sortActive
+                && !advancePending
+                && !indexer.isPreAdvancing()
                 && !manualPreAdvanceActive) {
 
-            // Only if tracking is enabled and exactly 2 PURPLE + 1 GREEN
-            if (artifactTracker.isTrackingEnabled()
-                    && artifactTracker.count(ArtifactTracker.Color.PURPLE) == 2
-                    && artifactTracker.count(ArtifactTracker.Color.GREEN) == 1) {
+            if (artifactTracker.isTrackingEnabled()) {
 
-                int motifTid = MotifStorage.motifTid; // 21=GPP, 22=PGP, 23=PPG
-                int steps = computeSortStepsForMotif(motifTid);
-                if (steps > 0) {
-                    sortActive = true;
-                    sortStepsRemaining = steps;
+                ArtifactTracker.Color assumedS3 = artifactTracker.inferSlot3AssumingTwoP1G();
+                if (assumedS3 == ArtifactTracker.Color.GREEN || assumedS3 == ArtifactTracker.Color.PURPLE) {
+
+                    artifactTracker.assumeSlot3(assumedS3);
+
+                    int motifTid = MotifStorage.motifTid; // 21=GPP, 22=PGP, 23=PPG
+                    int steps = computeSortStepsForMotif(motifTid);
+
+                    // steps == 0 means already sorted (so nothing should move)
+                    if (steps > 0) {
+                        sortActive = true;
+                        sortStepsRemaining = steps;
+                    }
                 }
             }
         }
         prevRB2 = rb2;
-
-        // ---------- INDEXER UPDATE ----------
-        indexer.update(dt);
 
         // ---------- Handle "advance completed" rotation ----------
         boolean advanceDone = advancePending
@@ -401,34 +366,19 @@ public class ColorSensorTele extends OpMode {
                 && (!advanceWasPre || !indexer.isPreAdvancing());
 
         if (advanceDone) {
-            // rotate tracker once per completed slot
-            artifactTracker.onAdvanceForward();
+            if (manualPreAdvanceActive) {
+                artifactTracker.onAdvanceForward();
+                artifactTracker.onAdvanceForward();
 
-            // clear pending
+                manualPreAdvanceActive = false;
+                manualPreAdvanceRemaining = 0;
+                indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
+            } else {
+                artifactTracker.onAdvanceForward();
+            }
+
             advancePending = false;
             advanceWasPre = false;
-
-            // If LB2 chain is active, immediately start the next pre-advance (no pause)
-            if (manualPreAdvanceActive) {
-                if (manualPreAdvanceRemaining > 0
-                        && flywheelActive
-                        && !indexer.isAutoRunning()
-                        && !indexer.isMoving()
-                        && !indexer.isPreAdvancing()) {
-
-                    indexer.startPreAdvanceOneSlot();
-                    manualPreAdvanceRemaining--;
-
-                    advancePending = true;
-                    advanceWasPre = true;
-                }
-
-                // done with both steps -> restore normal delay
-                if (manualPreAdvanceRemaining == 0 && !advancePending) {
-                    manualPreAdvanceActive = false;
-                    indexer.setStepDelay(savedIndexerStepDelay);
-                }
-            }
         }
 
         // ---------- Detect launch completion -> reset tracking to EMPTY ----------
@@ -443,14 +393,13 @@ public class ColorSensorTele extends OpMode {
             advancePending = false;
             advanceWasPre = false;
 
-            // cancel any manual chain and restore delay
             manualPreAdvanceRemaining = 0;
             manualPreAdvanceActive = false;
             indexer.setStepDelay(INDEXER_STEP_DELAY_NORMAL);
         }
         prevIndexerAutoRunning = autoRunning;
 
-        // ---------- AUTO SORT state machine (advance steps 1 at a time) ----------
+        // ---------- AUTO SORT state machine ----------
         if (sortActive) {
             if (!indexer.isMoving()
                     && !indexer.isAutoRunning()
@@ -459,7 +408,6 @@ public class ColorSensorTele extends OpMode {
                     && sortStepsRemaining > 0
                     && !manualPreAdvanceActive) {
 
-                // use gentle pre-advance during sorting
                 indexer.startPreAdvanceOneSlot();
                 advancePending = true;
                 advanceWasPre = true;
@@ -474,9 +422,6 @@ public class ColorSensorTele extends OpMode {
             }
         }
 
-        // ---------- ARTIFACT TRACKER UPDATE ----------
-        artifactTracker.update();
-
         // ---------- TELEMETRY ----------
         showTelemetryBasics(true);
         telemetry.addData("Tx Setpoint", "%.1f", lockCtrl.getDesiredTxDeg());
@@ -489,18 +434,14 @@ public class ColorSensorTele extends OpMode {
             telemetry.addData("PedroPose", "(%.1f, %.1f, %.1f°)", p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
         }
 
-        telemetry.addData("AutoNav", autoNavActive);
-        if (autoNavActive) telemetry.addData("Follower busy", follower.isBusy());
-
         telemetry.addData("MotifTid", MotifStorage.motifTid);
         telemetry.addData("TrackingEnabled", artifactTracker.isTrackingEnabled());
         telemetry.addData("Slots (1,2,3)", "%s %s %s",
                 artifactTracker.getSlot(1), artifactTracker.getSlot(2), artifactTracker.getSlot(3));
-        telemetry.addData("Counts (G,P,E,U)", "%d %d %d %d",
-                artifactTracker.count(ArtifactTracker.Color.GREEN),
-                artifactTracker.count(ArtifactTracker.Color.PURPLE),
-                artifactTracker.count(ArtifactTracker.Color.EMPTY),
-                artifactTracker.count(ArtifactTracker.Color.UNKNOWN));
+
+        ArtifactTracker.Color inferredS3 = artifactTracker.inferSlot3AssumingTwoP1G();
+        telemetry.addData("Inferred Slot3 (2P1G)", inferredS3);
+
         telemetry.addData("SortActive", sortActive);
         telemetry.addData("SortStepsRemaining", sortStepsRemaining);
         telemetry.addData("IndexerPreAdvancing", indexer.isPreAdvancing());
@@ -517,7 +458,6 @@ public class ColorSensorTele extends OpMode {
         Pose target = (selectedTid == RED_GOAL_TID) ? FAR_LAUNCH_RED_POSE : FAR_LAUNCH_BLUE_POSE;
 
         drive.drive(0, 0, 0);
-
         follower.startTeleopDrive();
 
         Pose cur = follower.getPose();
@@ -551,22 +491,16 @@ public class ColorSensorTele extends OpMode {
     // ================= SORT HELPERS =================
 
     private ArtifactTracker.Color[] desiredForMotif(int tid) {
-        // Desired LAUNCH ORDER (assumed): [slot3, slot1, slot2]
-        // 21=GPP, 22=PGP, 23=PPG
-
+        // Desired LAUNCH ORDER: [slot3, slot1, slot2]
         if (tid == 21) return new ArtifactTracker.Color[]{
                 ArtifactTracker.Color.GREEN, ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.PURPLE
         };
-
-        // ✅ FIX: swap 22 and 23 desired patterns (they were reversed)
         if (tid == 22) return new ArtifactTracker.Color[]{
                 ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.GREEN
         };
-
         if (tid == 23) return new ArtifactTracker.Color[]{
                 ArtifactTracker.Color.PURPLE, ArtifactTracker.Color.GREEN, ArtifactTracker.Color.PURPLE
         };
-
         return null;
     }
 
@@ -582,7 +516,6 @@ public class ColorSensorTele extends OpMode {
             s3 = old2;
         }
 
-        // Launch order assumed: slot3 then slot1 then slot2
         return new ArtifactTracker.Color[]{ s3, s1, s2 };
     }
 
