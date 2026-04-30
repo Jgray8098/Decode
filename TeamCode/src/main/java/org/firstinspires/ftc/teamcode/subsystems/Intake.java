@@ -43,4 +43,27 @@ public class Intake {
         intakeMotorTwo.setPower(0);
         intakeServo.setPosition(INTAKE_SERVO_STOWED_POSITION);
     }
+
+    /** Run intake motors in reverse — useful for unjamming or testing motor direction. */
+    public void Reverse() {
+        intakeMotorOne.setPower(-INTAKE_POWER);
+        intakeMotorTwo.setPower(-INTAKE_POWER);
+    }
+
+    /**
+     * Directly command the intake servo to a specific position.
+     * Use this from a testing OpMode to find the correct values for
+     * {@code INTAKE_SERVO_INTAKE_POSITION}, {@code INTAKE_SERVO_HOLD_POSITION},
+     * and {@code INTAKE_SERVO_STOWED_POSITION}.
+     *
+     * @param position Servo position  [0.0 – 1.0].
+     */
+    public void setServoPosition(double position) {
+        intakeServo.setPosition(position);
+    }
+
+    /** Returns the last commanded intake servo position (for telemetry). */
+    public double getServoPosition() {
+        return intakeServo.getPosition();
+    }
 }

@@ -235,6 +235,46 @@ public class Drivetrain {
         return false;
     }
 
+    /** Maximum power fraction applied during safe / test driving. */
+    private static final double SAFE_DRIVE_POWER_CAP = 0.40;
+
+    /**
+     * Drive the robot with full expo/deadzone shaping but capped at
+     * {@value #SAFE_DRIVE_POWER_CAP} total power on any wheel.
+     * Use this during initial testing to reduce the risk of impact.
+     *
+     * <p>Control mapping mirrors {@link #driveTeleop(Gamepad)}:
+     * left stick = translate, right stick X = rotate.</p>
+     */
+    public void driveSafe(Gamepad gamepad) {
+        double forward = applyExpo(applyDeadzone(-gamepad.left_stick_y, deadzone), expoTranslate);
+        double right   = applyExpo(applyDeadzone( gamepad.left_stick_x, deadzone), expoTranslate);
+        double rotate  = applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoRotate);
+
+        double fl = forward + right + rotate;
+        double fr = forward - right - rotate;
+        double bl = forward - right + rotate;
+        double br = forward + right - rotate;
+
+        // Normalize to ≤ 1, then apply the safety cap
+        double max = Math.max(1.0, Math.max(Math.max(Math.abs(fl), Math.abs(fr)),
+                                            Math.max(Math.abs(bl), Math.abs(br))));
+        frontLeftMotor.setPower(fl  / max * SAFE_DRIVE_POWER_CAP);
+        frontRightMotor.setPower(fr / max * SAFE_DRIVE_POWER_CAP);
+        backLeftMotor.setPower(bl   / max * SAFE_DRIVE_POWER_CAP);
+        backRightMotor.setPower(br  / max * SAFE_DRIVE_POWER_CAP);
+    }
+
+    /**
+     * Refresh the odometry estimate and return the current field pose.
+     * Convenience method for reading position in a testing OpMode without
+     * needing direct access to the odometry driver.
+     */
+    public Pose2D getPose() {
+        odometryPods.update();
+        return odometryPods.getPosition();
+    }
+
     private double applyDeadzone(double x, double dz) {
         if (Math.abs(x) < dz) return 0.0;
         double sign = Math.signum(x);

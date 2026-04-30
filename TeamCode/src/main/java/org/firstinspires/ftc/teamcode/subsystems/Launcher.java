@@ -251,12 +251,55 @@ public class Launcher {
     }
 
     // -------------------------------------------------------------------------
+    // Calibration helpers  (use only from test OpModes — bypass the state machine)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Spin both launcher motors at the given power fraction without engaging the
+     * state machine.  Intended for bench or initial testing only.
+     * Call {@link #stop()} to halt the motors when finished.
+     *
+     * @param power Motor power  [0.0 – 1.0].
+     */
+    public void testSpinMotors(double power) {
+        launcherMotorOne.setPower(power);
+        launcherMotorTwo.setPower(power);
+    }
+
+    /**
+     * Directly command both hood servos (ServoOne &amp; ServoTwo) to a position.
+     * Use this to find the correct {@code hoodPosition} values for the
+     * {@link InterpolatingTreeMap} setpoints.
+     *
+     * @param position Servo position  [0.0 – 1.0].
+     */
+    public void setHoodPosition(double position) {
+        hoodPositionServo1.setPosition(position);
+        hoodPositionServo2.setPosition(position);
+    }
+
+    /**
+     * Directly command the feeder servo (ServoThree) to a position.
+     * Use this to find {@code FEEDER_SERVO_FEED_POSITION} and
+     * {@code FEEDER_SERVO_IDLE_POSITION}.
+     *
+     * @param position Servo position  [0.0 – 1.0].
+     */
+    public void setFeederPosition(double position) {
+        feedLauncherServo.setPosition(position);
+    }
+
+    // -------------------------------------------------------------------------
     // Telemetry / state getters
     // -------------------------------------------------------------------------
     public LauncherState getState()        { return state; }
     public double getMeasuredRpm()  { return measuredRpm; }
     public double getTargetRpm()    { return targetRpm; }
     public double getTargetPower()  { return targetPower; }
+    /** Last position sent to both hood servos. */
+    public double getHoodPosition()   { return hoodPositionServo1.getPosition(); }
+    /** Last position sent to the feeder servo. */
+    public double getFeederPosition() { return feedLauncherServo.getPosition(); }
     /** Returns {@code true} once the launcher has reached the ready RPM threshold. */
     public boolean isAtSpeed()      { return measuredRpm >= targetRpm * RPM_READY_FRACTION; }
 
