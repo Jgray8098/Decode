@@ -275,6 +275,21 @@ public class Drivetrain {
         return odometryPods.getPosition();
     }
 
+    /**
+     * Override the odometry driver's current position estimate.
+     * Call this once after construction (before the match starts) so that
+     * the robot's known starting position is reflected in all subsequent
+     * {@link #driveToPosition} calculations.
+     *
+     * @param xInches         Field X coordinate of the starting position (inches).
+     * @param yInches         Field Y coordinate of the starting position (inches).
+     * @param headingDegrees  Starting heading in degrees (CCW positive, field frame).
+     */
+    public void setStartingPose(double xInches, double yInches, double headingDegrees) {
+        odometryPods.setPosition(
+                new Pose2D(DistanceUnit.INCH, xInches, yInches, AngleUnit.DEGREES, headingDegrees));
+    }
+
     private double applyDeadzone(double x, double dz) {
         if (Math.abs(x) < dz) return 0.0;
         double sign = Math.signum(x);

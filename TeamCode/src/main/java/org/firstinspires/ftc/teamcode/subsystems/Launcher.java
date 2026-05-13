@@ -141,7 +141,11 @@ public class Launcher {
         lastPosOne = launcherMotorOne.getCurrentPosition();
         lastPosTwo = launcherMotorTwo.getCurrentPosition();
 
-        feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
+        // Servos are intentionally NOT commanded here.
+        // No servo position is assumed safe until it has been physically verified
+        // at robot startup (see Mark2InitialTesting.init_loop() confirmation gate).
+        // The first setPosition() call on any servo happens only after the driver
+        // explicitly confirms the robot is safe to operate.
 
         // --- Distance (inches) → LaunchSetpoint (rpm, hoodPosition)  (tune!) ---
         //   rpm          = target launcher-wheel RPM for this shot distance
