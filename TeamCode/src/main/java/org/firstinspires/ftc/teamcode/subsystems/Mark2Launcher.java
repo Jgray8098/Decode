@@ -9,6 +9,12 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.utility.InterpolatingTreeMap;
 import org.firstinspires.ftc.teamcode.utility.LaunchSetpoint;
 
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_MOTOR_ONE;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_MOTOR_TWO;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_SERVO_ONE;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_SERVO_TWO;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_SERVO_THREE;
+
 
 /**
  * Launcher subsystem.
@@ -23,7 +29,7 @@ import org.firstinspires.ftc.teamcode.utility.LaunchSetpoint;
  *   launcher.update(dt);   // MUST be called every loop
  *   if (launcher.getState() == Launcher.State.DONE) launcher.stop();
  */
-public class Launcher {
+public class Mark2Launcher {
 
 
     // -------------------------------------------------------------------------
@@ -40,14 +46,7 @@ public class Launcher {
         DONE
     }
 
-    // -------------------------------------------------------------------------
-    // Hardware names
-    // -------------------------------------------------------------------------
-    private static final String LAUNCHER_MOTOR_ONE_NAME   = "LauncherMotorOne";
-    private static final String LAUNCHER_MOTOR_TWO_NAME   = "LauncherMotorTwo";
-    private static final String LAUNCHER_SERVO_ONE_NAME   = "LauncherServoOne";
-    private static final String LAUNCHER_SERVO_TWO_NAME   = "LauncherServoTwo";
-    private static final String LAUNCHER_SERVO_THREE_NAME = "LauncherServoThree";
+    // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
 
     // -------------------------------------------------------------------------
     // Servo positions  (tune!)
@@ -120,12 +119,12 @@ public class Launcher {
     // -------------------------------------------------------------------------
     // Constructor
     // -------------------------------------------------------------------------
-    public Launcher(HardwareMap hardwareMap) {
-        launcherMotorOne  = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_ONE_NAME);
-        launcherMotorTwo  = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_TWO_NAME);
-        hoodPositionServo1 = hardwareMap.servo.get(LAUNCHER_SERVO_ONE_NAME);
-        hoodPositionServo2 = hardwareMap.servo.get(LAUNCHER_SERVO_TWO_NAME);
-        feedLauncherServo = hardwareMap.servo.get(LAUNCHER_SERVO_THREE_NAME);
+    public Mark2Launcher(HardwareMap hardwareMap) {
+        launcherMotorOne   = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_ONE);
+        launcherMotorTwo   = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_TWO);
+        hoodPositionServo1 = hardwareMap.servo.get(LAUNCHER_SERVO_ONE);
+        hoodPositionServo2 = hardwareMap.servo.get(LAUNCHER_SERVO_TWO);
+        feedLauncherServo  = hardwareMap.servo.get(LAUNCHER_SERVO_THREE);
 
         launcherMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
         hoodPositionServo2.setDirection(Servo.Direction.REVERSE);

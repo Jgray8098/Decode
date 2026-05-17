@@ -8,9 +8,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import java.util.Locale;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
-import org.firstinspires.ftc.teamcode.subsystems.Drivetrain;
-import org.firstinspires.ftc.teamcode.subsystems.Intake;
-import org.firstinspires.ftc.teamcode.subsystems.Launcher;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 
 /**
  * Mark2InitialTesting
@@ -71,9 +71,9 @@ import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 public class Mark2InitialTesting extends OpMode {
 
     // ── Subsystems ────────────────────────────────────────────────────────────
-    //private Launcher   launcher;
-    private Intake     intake;
-    private Drivetrain drivetrain;
+    //private Mark2Launcher launcher;
+    private Mark2Intake intake;
+    private Mark2Drivetrain drivetrain;
 
     /**
      * Hardware-map name of the GoBILDA Pinpoint I²C device.
@@ -113,9 +113,9 @@ public class Mark2InitialTesting extends OpMode {
         I2cDeviceSynchSimple pinpointClient =
                 hardwareMap.get(I2cDeviceSynchSimple.class, PINPOINT_DEVICE_NAME);
 
-        drivetrain = new Drivetrain(hardwareMap, pinpointClient);
-        intake     = new Intake(hardwareMap);
-        //launcher   = new Launcher(hardwareMap);
+        drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
+        intake = new Mark2Intake(hardwareMap);
+        //launcher = new Mark2Launcher(hardwareMap);
 
         // ── DO NOT call setPosition() here. ──────────────────────────────────
         // The Launcher constructor already commands the feeder servo to its idle

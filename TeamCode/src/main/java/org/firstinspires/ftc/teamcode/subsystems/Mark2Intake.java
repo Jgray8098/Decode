@@ -5,23 +5,25 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
-public class Intake {
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.INTAKE_MOTOR_ONE;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.INTAKE_MOTOR_TWO;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.INTAKE_SERVO;
+
+public class Mark2Intake {
     private DcMotor intakeMotorOne;
     private DcMotor intakeMotorTwo;
     private Servo intakeServo;
-    private static final double INTAKE_POWER = .75;
-    private static final double INTAKE_HOLD_ARTIFACT_POWER = .15;
+    // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
+    private static final double INTAKE_POWER                 = .75;
+    private static final double INTAKE_HOLD_ARTIFACT_POWER   = .15;
     private static final double INTAKE_SERVO_INTAKE_POSITION = 0.0;
     private static final double INTAKE_SERVO_STOWED_POSITION = 0.0;
-    private static final double INTAKE_SERVO_HOLD_POSITION = 0.0;
-    private static final String INTAKE_MOTOR_ONE_NAME = "IntakeMotorOne";
-    private static final String INTAKE_MOTOR_TWO_NAME = "IntakeMotorTwo";
-    private static final String INTAKE_SERVO_NAME = "IntakeServo";
+    private static final double INTAKE_SERVO_HOLD_POSITION   = 0.0;
 
-    public Intake(HardwareMap hardwareMap){
-        intakeMotorOne  = hardwareMap.dcMotor.get(INTAKE_MOTOR_ONE_NAME);
-        intakeMotorTwo = hardwareMap.dcMotor.get(INTAKE_MOTOR_TWO_NAME);
-        intakeServo = hardwareMap.servo.get(INTAKE_SERVO_NAME);
+    public Mark2Intake(HardwareMap hardwareMap){
+        intakeMotorOne  = hardwareMap.dcMotor.get(INTAKE_MOTOR_ONE);
+        intakeMotorTwo = hardwareMap.dcMotor.get(INTAKE_MOTOR_TWO);
+        intakeServo = hardwareMap.servo.get(INTAKE_SERVO);
 
         intakeMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
     }

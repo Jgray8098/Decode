@@ -8,10 +8,11 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
-import org.firstinspires.ftc.teamcode.subsystems.Drivetrain;
-import org.firstinspires.ftc.teamcode.subsystems.Intake;
-import org.firstinspires.ftc.teamcode.subsystems.Launcher;
-import org.firstinspires.ftc.teamcode.subsystems.Launcher.LauncherState;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher.LauncherState;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames;
 
 import java.util.Locale;
 
@@ -21,7 +22,7 @@ import java.util.Locale;
  * Replaces ColorSensorTele.  All vision (Limelight), color-sensor (ArtifactTracker /
  * MotifStorage), PedroPathing (Follower), and old-mechanism (Flywheel / Indexer /
  * MecanumDrive) dependencies have been removed.  Only the three Mark2 subsystems
- * are used: {@link Drivetrain}, {@link Intake}, and {@link Launcher}.
+ * are used: {@link Mark2Drivetrain}, {@link Mark2Intake}, and {@link Mark2Launcher}.
  *
  * ── Control scheme ────────────────────────────────────────────────────────────
  *
@@ -60,8 +61,7 @@ import java.util.Locale;
 @TeleOp(name = "Mark2 TeleOp", group = "Mark2")
 public class Mark2TeleOp extends OpMode {
 
-    // ── Hardware config name ──────────────────────────────────────────────────
-    private static final String PINPOINT_NAME = "pinpoint";
+    // ── Hardware config name — see Mark2HardwareMapNames ──────────────────────
 
     // ── Launch target field position (inches) — TUNE ─────────────────────────
     /**
@@ -79,9 +79,9 @@ public class Mark2TeleOp extends OpMode {
     private static final double FAR_SHOT_DISTANCE   = 120.0;   // TUNE
 
     // ── Subsystems ────────────────────────────────────────────────────────────
-    private Drivetrain drivetrain;
-    private Intake     intake;
-    private Launcher   launcher;
+    private Mark2Drivetrain mark2Drivetrain;
+    private Mark2Intake mark2Intake;
+    private Mark2Launcher mark2Launcher;
 
     // ── Loop timing ───────────────────────────────────────────────────────────
     private long lastNs;
@@ -105,11 +105,11 @@ public class Mark2TeleOp extends OpMode {
     @Override
     public void init() {
         I2cDeviceSynchSimple pinpointClient =
-                hardwareMap.get(I2cDeviceSynchSimple.class, PINPOINT_NAME);
+                hardwareMap.get(I2cDeviceSynchSimple.class, Mark2HardwareMapNames.PINPOINT);
 
-        drivetrain = new Drivetrain(hardwareMap, pinpointClient);
-        intake     = new Intake(hardwareMap);
-        launcher   = new Launcher(hardwareMap);
+        mark2Drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
+        mark2Intake = new Mark2Intake(hardwareMap);
+        mark2Launcher = new Mark2Launcher(hardwareMap);
 
         lastNs = System.nanoTime();
 
@@ -134,19 +134,19 @@ public class Mark2TeleOp extends OpMode {
         // Releasing left bumper returns full control to the driver instantly.
         aimActive = gamepad2.left_bumper;
         if (aimActive) {
-            drivetrain.aim(GOAL_X, GOAL_Y);
+            mark2Drivetrain.aim(GOAL_X, GOAL_Y);
         } else {
-            drivetrain.driveTeleop(gamepad1);
+            mark2Drivetrain.driveTeleop(gamepad1);
         }
 
         // ── Intake ────────────────────────────────────────────────────────────
         //   Priority: Y (PickUp) > X (Hold) > default (Stop)
         if (gamepad2.y) {
-            intake.PickUp();
+            mark2Intake.PickUp();
         } else if (gamepad2.x) {
-            intake.Hold();
+            mark2Intake.Hold();
         } else {
-            intake.Stop();
+            mark2Intake.Stop();
         }
 
         // ── Launcher — button edge detection ─────────────────────────────────
@@ -158,22 +158,22 @@ public class Mark2TeleOp extends OpMode {
         // Right bumper — live-distance shot using InterpolatingTreeMap
         if (rb2 && !prevRB2) {
             lastShotDistance = distanceToGoal();
-            launcher.shoot(lastShotDistance);
+            mark2Launcher.shoot(lastShotDistance);
         }
 
         // D-pad fallbacks
         if (dpadUp && !prevDpadUp) {
             lastShotDistance = CLOSE_SHOT_DISTANCE;
-            launcher.shoot(CLOSE_SHOT_DISTANCE);
+            mark2Launcher.shoot(CLOSE_SHOT_DISTANCE);
         }
         if (dpadDown && !prevDpadDown) {
             lastShotDistance = FAR_SHOT_DISTANCE;
-            launcher.shoot(FAR_SHOT_DISTANCE);
+            mark2Launcher.shoot(FAR_SHOT_DISTANCE);
         }
 
         // B — full stop
         if (b2 && !prevB2) {
-            launcher.stop();
+            mark2Launcher.stop();
         }
 
         prevRB2      = rb2;
@@ -182,12 +182,12 @@ public class Mark2TeleOp extends OpMode {
         prevB2       = b2;
 
         // ── Launcher state machine ────────────────────────────────────────────
-        launcher.update(dt);
+        mark2Launcher.update(dt);
 
         // Auto-retract feeder, keep motors spinning → ready for next shot immediately.
         // Press B to shut everything down between volleys.
-        if (launcher.getState() == LauncherState.DONE) {
-            launcher.resetFeeder();
+        if (mark2Launcher.getState() == LauncherState.DONE) {
+            mark2Launcher.resetFeeder();
         }
 
         // ── Telemetry ─────────────────────────────────────────────────────────
@@ -203,7 +203,7 @@ public class Mark2TeleOp extends OpMode {
      * odometry position to {@link #GOAL_X} / {@link #GOAL_Y}.
      */
     private double distanceToGoal() {
-        Pose2D pose = drivetrain.getPose();
+        Pose2D pose = mark2Drivetrain.getPose();
         double dx = GOAL_X - pose.getX(DistanceUnit.INCH);
         double dy = GOAL_Y - pose.getY(DistanceUnit.INCH);
         return Math.hypot(dx, dy);
@@ -211,7 +211,7 @@ public class Mark2TeleOp extends OpMode {
 
     private void showTelemetry() {
         // Pose + distance to goal
-        Pose2D pose = drivetrain.getPose();
+        Pose2D pose = mark2Drivetrain.getPose();
         telemetry.addData("X (in)",          "%.2f", pose.getX(DistanceUnit.INCH));
         telemetry.addData("Y (in)",          "%.2f", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading",         "%.1f°", pose.getHeading(AngleUnit.DEGREES));
@@ -219,17 +219,17 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("Aiming",          aimActive ? "YES — rotating to goal" : "no");
 
         telemetry.addLine("─── Launcher ───────────────────────────");
-        telemetry.addData("State",            launcher.getState());
+        telemetry.addData("State",            mark2Launcher.getState());
         telemetry.addData("Last shot dist",   String.format(Locale.US, "%.1f in", lastShotDistance));
-        telemetry.addData("Target RPM",       String.format(Locale.US, "%.0f", launcher.getTargetRpm()));
-        telemetry.addData("Measured RPM",     String.format(Locale.US, "%.0f", launcher.getMeasuredRpm()));
-        telemetry.addData("Target Power",     String.format(Locale.US, "%.3f", launcher.getTargetPower()));
-        telemetry.addData("Hood pos",         String.format(Locale.US, "%.3f", nanToZero(launcher.getHoodPosition())));
-        telemetry.addData("Feeder pos",       String.format(Locale.US, "%.3f", nanToZero(launcher.getFeederPosition())));
-        telemetry.addData("At speed?",        launcher.isAtSpeed());
+        telemetry.addData("Target RPM",       String.format(Locale.US, "%.0f", mark2Launcher.getTargetRpm()));
+        telemetry.addData("Measured RPM",     String.format(Locale.US, "%.0f", mark2Launcher.getMeasuredRpm()));
+        telemetry.addData("Target Power",     String.format(Locale.US, "%.3f", mark2Launcher.getTargetPower()));
+        telemetry.addData("Hood pos",         String.format(Locale.US, "%.3f", nanToZero(mark2Launcher.getHoodPosition())));
+        telemetry.addData("Feeder pos",       String.format(Locale.US, "%.3f", nanToZero(mark2Launcher.getFeederPosition())));
+        telemetry.addData("At speed?",        mark2Launcher.isAtSpeed());
 
         telemetry.addLine("─── Intake servo ───────────────────────");
-        telemetry.addData("Intake servo",     String.format(Locale.US, "%.3f", nanToZero(intake.getServoPosition())));
+        telemetry.addData("Intake servo",     String.format(Locale.US, "%.3f", nanToZero(mark2Intake.getServoPosition())));
 
         telemetry.addLine("─── Controls ───────────────────────────");
         telemetry.addLine("GP2 Y=PickUp  X=Hold  A=Stop");
