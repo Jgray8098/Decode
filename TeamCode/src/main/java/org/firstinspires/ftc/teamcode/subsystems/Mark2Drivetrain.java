@@ -12,7 +12,13 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
-public class Drivetrain {
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_LEFT_MOTOR;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_RIGHT_MOTOR;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.REAR_LEFT_MOTOR;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.REAR_RIGHT_MOTOR;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.IMU_SENSOR;
+
+public class Mark2Drivetrain {
     private DcMotor frontLeftMotor;
     private DcMotor frontRightMotor;
     private DcMotor backLeftMotor;
@@ -22,11 +28,7 @@ public class Drivetrain {
     //FOR THE ODOMETRY PODS, reference SensorOctoQuad.java and/or SensorGoBildaPinpoint.java
     private GoBildaPinpointDriver odometryPods;
 
-    private static final String FRONT_LEFT_MOTOR_NAME = "LeftFrontMotor";
-    private static final String FRONT_RIGHT_MOTOR_NAME = "RightFrontMotor";
-    private static final String REAR_LEFT_MOTOR_NAME = "LeftBackMotor";
-    private static final String REAR_RIGHT_MOTOR_NAME = "RightBackMotor";
-    private static final String IMU_NAME = "imu";
+    // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
 
     // -------------------------------------------------------------------------
     // Teleop tuning
@@ -66,12 +68,12 @@ public class Drivetrain {
     private double dtp_rIntegral = 0, dtp_rLastError = 0;
     private double dtp_lastTargetX = Double.NaN, dtp_lastTargetY = Double.NaN, dtp_lastTargetRot = Double.NaN;
 
-    public Drivetrain(HardwareMap hardwareMap, I2cDeviceSynchSimple odometryPodsDeviceClient){
-        frontLeftMotor  = hardwareMap.dcMotor.get(FRONT_LEFT_MOTOR_NAME);
-        frontRightMotor = hardwareMap.dcMotor.get(FRONT_RIGHT_MOTOR_NAME);
-        backLeftMotor   = hardwareMap.dcMotor.get(REAR_LEFT_MOTOR_NAME);
-        backRightMotor  = hardwareMap.dcMotor.get(REAR_RIGHT_MOTOR_NAME);
-        imu = hardwareMap.get(IMU.class, IMU_NAME);
+    public Mark2Drivetrain(HardwareMap hardwareMap, I2cDeviceSynchSimple odometryPodsDeviceClient){
+        frontLeftMotor  = hardwareMap.dcMotor.get(FRONT_LEFT_MOTOR);
+        frontRightMotor = hardwareMap.dcMotor.get(FRONT_RIGHT_MOTOR);
+        backLeftMotor   = hardwareMap.dcMotor.get(REAR_LEFT_MOTOR);
+        backRightMotor  = hardwareMap.dcMotor.get(REAR_RIGHT_MOTOR);
+        imu = hardwareMap.get(IMU.class, IMU_SENSOR);
         odometryPods = new GoBildaPinpointDriver(odometryPodsDeviceClient, false);
 
         frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);

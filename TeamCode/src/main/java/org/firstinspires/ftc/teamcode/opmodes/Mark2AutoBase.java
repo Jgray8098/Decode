@@ -7,17 +7,18 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
-import org.firstinspires.ftc.teamcode.subsystems.Drivetrain;
-import org.firstinspires.ftc.teamcode.subsystems.Intake;
-import org.firstinspires.ftc.teamcode.subsystems.Launcher;
-import org.firstinspires.ftc.teamcode.subsystems.Launcher.LauncherState;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher.LauncherState;
+import org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames;
 
 /**
  * Abstract base for all Mark2 autonomous OpModes.
  *
  * <p>Provides blocking {@link #navigate} and {@link #shootFrom} helpers that
- * drive the robot using the Pinpoint odometry-backed PID in {@link Drivetrain}
- * and fire the robot using the {@link Launcher} state machine.  Subclasses
+ * drive the robot using the Pinpoint odometry-backed PID in {@link Mark2Drivetrain}
+ * and fire the robot using the {@link Mark2Launcher} state machine.  Subclasses
  * only need to implement {@link #setup()} (hardware/pose init) and
  * {@link #runPath()} (the autonomous sequence).</p>
  *
@@ -26,9 +27,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Launcher.LauncherState;
  */
 public abstract class Mark2AutoBase extends LinearOpMode {
 
-    // ── Hardware name ─────────────────────────────────────────────────────────
-    /** Config name for the GoBilda Pinpoint in the robot controller. */
-    protected static final String PINPOINT_NAME = "pinpoint";
+    // ── Hardware name — see Mark2HardwareMapNames ─────────────────────────────
 
     // ── Tuning ────────────────────────────────────────────────────────────────
     /** Maximum time to wait for a shot to complete before continuing. */
@@ -37,9 +36,9 @@ public abstract class Mark2AutoBase extends LinearOpMode {
     protected static final double OUTTAKE_REVERSE_S    = 1.0;
 
     // ── Subsystems ────────────────────────────────────────────────────────────
-    protected Drivetrain drivetrain;
-    protected Intake     intake;
-    protected Launcher   launcher;
+    protected Mark2Drivetrain mark2Drivetrain;
+    protected Mark2Intake mark2Intake;
+    protected Mark2Launcher mark2Launcher;
 
     // ── Internal state ────────────────────────────────────────────────────────
     /** Label shown in telemetry while the robot works through its path. */
@@ -69,8 +68,8 @@ public abstract class Mark2AutoBase extends LinearOpMode {
         }
 
         // Safety: always stop intake and launcher when the OpMode ends.
-        intake.Stop();
-        launcher.stop();
+        mark2Intake.Stop();
+        mark2Launcher.stop();
     }
 
     // =========================================================================
@@ -106,12 +105,12 @@ public abstract class Mark2AutoBase extends LinearOpMode {
      */
     protected void initSubsystems(double startX, double startY, double startRotDeg) {
         I2cDeviceSynchSimple pinpointClient =
-                hardwareMap.get(I2cDeviceSynchSimple.class, PINPOINT_NAME);
-        drivetrain = new Drivetrain(hardwareMap, pinpointClient);
-        drivetrain.setStartingPose(startX, startY, startRotDeg);
+                hardwareMap.get(I2cDeviceSynchSimple.class, Mark2HardwareMapNames.PINPOINT);
+        mark2Drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
+        mark2Drivetrain.setStartingPose(startX, startY, startRotDeg);
 
-        intake   = new Intake(hardwareMap);
-        launcher = new Launcher(hardwareMap);
+        mark2Intake = new Mark2Intake(hardwareMap);
+        mark2Launcher = new Mark2Launcher(hardwareMap);
     }
 
     // =========================================================================
@@ -132,8 +131,8 @@ public abstract class Mark2AutoBase extends LinearOpMode {
         while (opModeIsActive()) {
             double dt = nextDt();
             tickReverse(dt);
-            launcher.update(dt);   // no-op when launcher is IDLE
-            if (drivetrain.driveToPosition(x, y, rotDeg, dt)) break;
+            mark2Launcher.update(dt);   // no-op when launcher is IDLE
+            if (mark2Drivetrain.driveToPosition(x, y, rotDeg, dt)) break;
             postTelemetry();
         }
         postTelemetry();
@@ -145,14 +144,14 @@ public abstract class Mark2AutoBase extends LinearOpMode {
      * {@link #stopIntake()} or {@link #startReverseFor(double)} when done.
      */
     protected void navigateWithIntake(double x, double y, double rotDeg) {
-        intake.PickUp();
+        mark2Intake.PickUp();
         navigate(x, y, rotDeg);
     }
 
     /** Immediately stop the intake and cancel any active reverse timer. */
     protected void stopIntake() {
         reverseRemainingS = 0.0;
-        intake.Stop();
+        mark2Intake.Stop();
     }
 
     // =========================================================================
@@ -169,18 +168,18 @@ public abstract class Mark2AutoBase extends LinearOpMode {
      */
     protected void shootFrom(double distanceInches) {
         currentPhase = String.format("Shoot (%.0f in)", distanceInches);
-        launcher.shoot(distanceInches);
+        mark2Launcher.shoot(distanceInches);
 
         double elapsed = 0.0;
         while (opModeIsActive()
-                && launcher.getState() != LauncherState.DONE
+                && mark2Launcher.getState() != LauncherState.DONE
                 && elapsed < SHOOT_TIMEOUT_S) {
             double dt = nextDt();
             elapsed += dt;
-            launcher.update(dt);
+            mark2Launcher.update(dt);
             postTelemetry();
         }
-        launcher.stop();
+        mark2Launcher.stop();
     }
 
     // =========================================================================
@@ -197,7 +196,7 @@ public abstract class Mark2AutoBase extends LinearOpMode {
      */
     protected void startReverseFor(double seconds) {
         reverseRemainingS = seconds;
-        intake.Reverse();
+        mark2Intake.Reverse();
     }
 
     private void tickReverse(double dt) {
@@ -205,7 +204,7 @@ public abstract class Mark2AutoBase extends LinearOpMode {
             reverseRemainingS -= dt;
             if (reverseRemainingS <= 0.0) {
                 reverseRemainingS = 0.0;
-                intake.Stop();
+                mark2Intake.Stop();
             }
         }
     }
@@ -228,14 +227,14 @@ public abstract class Mark2AutoBase extends LinearOpMode {
 
     /** Post standard per-loop telemetry. */
     protected void postTelemetry() {
-        Pose2D pose = drivetrain.getPose();
+        Pose2D pose = mark2Drivetrain.getPose();
         telemetry.addData("Phase",       currentPhase);
         telemetry.addData("X (in)",      "%.2f", pose.getX(DistanceUnit.INCH));
         telemetry.addData("Y (in)",      "%.2f", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading",     "%.1f°", pose.getHeading(AngleUnit.DEGREES));
-        telemetry.addData("Launcher",    launcher.getState());
-        telemetry.addData("Target RPM",  "%.0f", launcher.getTargetRpm());
-        telemetry.addData("Meas. RPM",   "%.0f", launcher.getMeasuredRpm());
+        telemetry.addData("Launcher",    mark2Launcher.getState());
+        telemetry.addData("Target RPM",  "%.0f", mark2Launcher.getTargetRpm());
+        telemetry.addData("Meas. RPM",   "%.0f", mark2Launcher.getMeasuredRpm());
         telemetry.addData("Rev timer",   "%.2f s", reverseRemainingS);
         telemetry.update();
     }
