@@ -71,7 +71,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 public class Mark2InitialTesting extends OpMode {
 
     // ── Subsystems ────────────────────────────────────────────────────────────
-    private Launcher   launcher;
+    //private Launcher   launcher;
     private Intake     intake;
     private Drivetrain drivetrain;
 
@@ -115,7 +115,7 @@ public class Mark2InitialTesting extends OpMode {
 
         drivetrain = new Drivetrain(hardwareMap, pinpointClient);
         intake     = new Intake(hardwareMap);
-        launcher   = new Launcher(hardwareMap);
+        //launcher   = new Launcher(hardwareMap);
 
         // ── DO NOT call setPosition() here. ──────────────────────────────────
         // The Launcher constructor already commands the feeder servo to its idle
@@ -127,8 +127,8 @@ public class Mark2InitialTesting extends OpMode {
         // variables are in sync with the hardware from the very first telemetry
         // update.  getPosition() returns NaN for servos that have not yet been
         // commanded; nanToZero() converts that to 0.0 for safe display/use.
-        hoodServoPos   = nanToZero(launcher.getHoodPosition());
-        feederServoPos = nanToZero(launcher.getFeederPosition());
+        //hoodServoPos   = nanToZero(launcher.getHoodPosition());
+        //feederServoPos = nanToZero(launcher.getFeederPosition());
         intakeServoPos = nanToZero(intake.getServoPosition());
     }
 
@@ -150,14 +150,14 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addLine("");
 
         telemetry.addLine("Servo status after INIT:");
-        telemetry.addData("  Hood servo (1 & 2)",
-                Double.isNaN(launcher.getHoodPosition())
-                        ? "NOT commanded — physically untouched"
-                        : String.format(Locale.US, "commanded to %.3f by constructor", launcher.getHoodPosition()));
-        telemetry.addData("  Feeder servo",
-                Double.isNaN(launcher.getFeederPosition())
-                        ? "NOT commanded — physically untouched"
-                        : String.format(Locale.US, "commanded to %.3f by constructor", launcher.getFeederPosition()));
+        //telemetry.addData("  Hood servo (1 & 2)",
+        //        Double.isNaN(launcher.getHoodPosition())
+        //                ? "NOT commanded — physically untouched"
+        //                : String.format(Locale.US, "commanded to %.3f by constructor", launcher.getHoodPosition()));
+        //telemetry.addData("  Feeder servo",
+        //        Double.isNaN(launcher.getFeederPosition())
+        //                ? "NOT commanded — physically untouched"
+        //                : String.format(Locale.US, "commanded to %.3f by constructor", launcher.getFeederPosition()));
         telemetry.addData("  Intake servo",
                 Double.isNaN(intake.getServoPosition())
                         ? "NOT commanded — physically untouched"
@@ -224,12 +224,12 @@ public class Mark2InitialTesting extends OpMode {
         prevRB2 = rb2;
 
         // ── Launcher motors (hold right trigger to spin) ──────────────────────
-        if (gamepad2.right_trigger > 0.5) {
+        /* if (gamepad2.right_trigger > 0.5) {
             launcher.testSpinMotors(LAUNCHER_TEST_POWER);
         } else {
             // Stop motors only — leave servos where they are for position inspection
             launcher.testSpinMotors(0.0);
-        }
+        }*/
 
         // ── Hood servo nudge (Dpad Up / Down, one step per press) ────────────
         boolean dpadUp   = gamepad2.dpad_up;
@@ -237,11 +237,11 @@ public class Mark2InitialTesting extends OpMode {
 
         if (dpadUp && !prevDpadUp) {
             hoodServoPos = clamp(hoodServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setHoodPosition(hoodServoPos);
+            //launcher.setHoodPosition(hoodServoPos);
         }
         if (dpadDown && !prevDpadDown) {
             hoodServoPos = clamp(hoodServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setHoodPosition(hoodServoPos);
+            //launcher.setHoodPosition(hoodServoPos);
         }
 
         // ── Feeder servo nudge (Dpad Right / Left, one step per press) ───────
@@ -250,11 +250,11 @@ public class Mark2InitialTesting extends OpMode {
 
         if (dpadRight && !prevDpadRight) {
             feederServoPos = clamp(feederServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setFeederPosition(feederServoPos);
+            //launcher.setFeederPosition(feederServoPos);
         }
         if (dpadLeft && !prevDpadLeft) {
             feederServoPos = clamp(feederServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setFeederPosition(feederServoPos);
+            //launcher.setFeederPosition(feederServoPos);
         }
 
         prevDpadUp    = dpadUp;
@@ -274,7 +274,7 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addData("  Hood servo pos",   "%.3f", hoodServoPos);
         telemetry.addData("  Feeder servo pos", "%.3f", feederServoPos);
         telemetry.addData("  Motor power cmd",  "%.2f", LAUNCHER_TEST_POWER);
-        telemetry.addData("  Measured RPM",     "%.0f", launcher.getMeasuredRpm());
+        //telemetry.addData("  Measured RPM",     "%.0f", launcher.getMeasuredRpm());
 
         telemetry.addLine("── Intake ──────────────────────");
         telemetry.addData("  Intake servo pos", "%.3f", intakeServoPos);
