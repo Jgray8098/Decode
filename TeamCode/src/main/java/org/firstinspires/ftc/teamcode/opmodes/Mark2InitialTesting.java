@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.I2cDeviceSynchSimple;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import java.util.Locale;
@@ -10,7 +9,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
-import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
+// Mark2Launcher import omitted — launcher subsystem commented out pending hardware install
 
 /**
  * Mark2InitialTesting
@@ -75,11 +74,9 @@ public class Mark2InitialTesting extends OpMode {
     private Mark2Intake intake;
     private Mark2Drivetrain drivetrain;
 
-    /**
-     * Hardware-map name of the GoBILDA Pinpoint I²C device.
-     * Must match exactly what is configured in the robot controller app.
-     */
-    private static final String PINPOINT_DEVICE_NAME = "pinpoint";
+    // ── Hardware config name ──────────────────────────────────────────────────
+    // Pinpoint not currently installed on robot — using no-Pinpoint constructor.
+    // Restore by passing an I2cDeviceSynchSimple to new Mark2Drivetrain(hwMap, client).
 
     // ── Test constants ────────────────────────────────────────────────────────
     /** Motor power used when the right trigger spins the launcher during testing. */
@@ -110,10 +107,7 @@ public class Mark2InitialTesting extends OpMode {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void init() {
-        I2cDeviceSynchSimple pinpointClient =
-                hardwareMap.get(I2cDeviceSynchSimple.class, PINPOINT_DEVICE_NAME);
-
-        drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
+        drivetrain = new Mark2Drivetrain(hardwareMap);   // no Pinpoint hardware yet
         intake = new Mark2Intake(hardwareMap);
         //launcher = new Mark2Launcher(hardwareMap);
 

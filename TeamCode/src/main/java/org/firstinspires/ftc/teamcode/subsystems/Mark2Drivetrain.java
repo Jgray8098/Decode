@@ -6,7 +6,6 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.I2cDeviceSynchSimple;
-import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -16,19 +15,24 @@ import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FR
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_RIGHT_MOTOR;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.REAR_LEFT_MOTOR;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.REAR_RIGHT_MOTOR;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.IMU_SENSOR;
 
 public class Mark2Drivetrain {
     private DcMotor frontLeftMotor;
     private DcMotor frontRightMotor;
     private DcMotor backLeftMotor;
     private DcMotor backRightMotor;
-    private IMU imu;
+
+    // IMU removed — not currently installed on robot.
+    // Restore: add `import com.qualcomm.robotcore.hardware.IMU;`,
+    // re-add `import static ...Mark2HardwareMapNames.IMU_SENSOR;`,
+    // add `private IMU imu;`, and `imu = hardwareMap.get(IMU.class, IMU_SENSOR);`
+    // in both constructors.
 
     //FOR THE ODOMETRY PODS, reference SensorOctoQuad.java and/or SensorGoBildaPinpoint.java
     private GoBildaPinpointDriver odometryPods;
 
-    // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
+    /** True when a Pinpoint client was provided at construction time. */
+    private final boolean hasPinpoint;
 
     // -------------------------------------------------------------------------
     // Teleop tuning
@@ -73,8 +77,25 @@ public class Mark2Drivetrain {
         frontRightMotor = hardwareMap.dcMotor.get(FRONT_RIGHT_MOTOR);
         backLeftMotor   = hardwareMap.dcMotor.get(REAR_LEFT_MOTOR);
         backRightMotor  = hardwareMap.dcMotor.get(REAR_RIGHT_MOTOR);
-        imu = hardwareMap.get(IMU.class, IMU_SENSOR);
         odometryPods = new GoBildaPinpointDriver(odometryPodsDeviceClient, false);
+        hasPinpoint = true;
+
+        frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+    }
+
+    /**
+     * No-Pinpoint constructor for bench / initial testing without odometry hardware.
+     * {@link #driveToPosition} and {@link #aim} are no-ops (return false immediately).
+     * {@link #getPose} returns a zeroed pose.
+     */
+    public Mark2Drivetrain(HardwareMap hardwareMap){
+        frontLeftMotor  = hardwareMap.dcMotor.get(FRONT_LEFT_MOTOR);
+        frontRightMotor = hardwareMap.dcMotor.get(FRONT_RIGHT_MOTOR);
+        backLeftMotor   = hardwareMap.dcMotor.get(REAR_LEFT_MOTOR);
+        backRightMotor  = hardwareMap.dcMotor.get(REAR_RIGHT_MOTOR);
+        odometryPods = null;
+        hasPinpoint = false;
 
         frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -122,6 +143,8 @@ public class Mark2Drivetrain {
      */
     public boolean driveToPosition(double targetXPosition, double targetYPosition,
                                    double targetRotation, double dtSec) {
+        if (!hasPinpoint) return false;   // odometry unavailable; caller should not block on this
+
         // Reset integrators whenever a new target is commanded
         if (targetXPosition != dtp_lastTargetX
                 || targetYPosition  != dtp_lastTargetY
@@ -212,6 +235,8 @@ public class Mark2Drivetrain {
      * @return {@code true} once the robot is within {@value #ROT_TOLERANCE_DEGREES}° of the target direction.
      */
     public boolean aim(double targetXPosition, double targetYPosition) {
+        if (!hasPinpoint) return false;   // odometry unavailable
+
         odometryPods.update();
         Pose2D pose = odometryPods.getPosition();
 
@@ -273,6 +298,9 @@ public class Mark2Drivetrain {
      * needing direct access to the odometry driver.
      */
     public Pose2D getPose() {
+        if (!hasPinpoint) {
+            return new Pose2D(DistanceUnit.INCH, 0, 0, AngleUnit.DEGREES, 0);
+        }
         odometryPods.update();
         return odometryPods.getPosition();
     }
@@ -288,6 +316,7 @@ public class Mark2Drivetrain {
      * @param headingDegrees  Starting heading in degrees (CCW positive, field frame).
      */
     public void setStartingPose(double xInches, double yInches, double headingDegrees) {
+        if (!hasPinpoint) return;   // silently ignored when running without odometry
         odometryPods.setPosition(
                 new Pose2D(DistanceUnit.INCH, xInches, yInches, AngleUnit.DEGREES, headingDegrees));
     }

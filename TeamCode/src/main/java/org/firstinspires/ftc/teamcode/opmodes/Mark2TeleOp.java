@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.I2cDeviceSynchSimple;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -12,7 +11,6 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher.LauncherState;
-import org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames;
 
 import java.util.Locale;
 
@@ -104,10 +102,7 @@ public class Mark2TeleOp extends OpMode {
 
     @Override
     public void init() {
-        I2cDeviceSynchSimple pinpointClient =
-                hardwareMap.get(I2cDeviceSynchSimple.class, Mark2HardwareMapNames.PINPOINT);
-
-        mark2Drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
+        mark2Drivetrain = new Mark2Drivetrain(hardwareMap);   // no Pinpoint — not yet on robot
         mark2Intake = new Mark2Intake(hardwareMap);
         mark2Launcher = new Mark2Launcher(hardwareMap);
 

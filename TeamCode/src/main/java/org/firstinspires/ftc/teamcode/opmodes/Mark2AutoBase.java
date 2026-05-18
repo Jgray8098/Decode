@@ -104,9 +104,9 @@ public abstract class Mark2AutoBase extends LinearOpMode {
      * @param startRotDeg    Starting heading (degrees, CCW positive).
      */
     protected void initSubsystems(double startX, double startY, double startRotDeg) {
-        I2cDeviceSynchSimple pinpointClient =
-                hardwareMap.get(I2cDeviceSynchSimple.class, Mark2HardwareMapNames.PINPOINT);
-        mark2Drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
+        //I2cDeviceSynchSimple pinpointClient =
+        //        hardwareMap.get(I2cDeviceSynchSimple.class, Mark2HardwareMapNames.PINPOINT);
+        //mark2Drivetrain = new Mark2Drivetrain(hardwareMap, pinpointClient);
         mark2Drivetrain.setStartingPose(startX, startY, startRotDeg);
 
         mark2Intake = new Mark2Intake(hardwareMap);
