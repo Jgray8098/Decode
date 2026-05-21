@@ -14,7 +14,7 @@ public class Mark2Intake {
     private DcMotor intakeMotorTwo;
     private Servo intakeServo;
     // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
-    private static final double INTAKE_POWER                 = .75;
+    private static final double INTAKE_POWER                 = .99;
     private static final double INTAKE_HOLD_ARTIFACT_POWER   = .15;
     private static final double INTAKE_SERVO_INTAKE_POSITION = 0.0;
     private static final double INTAKE_SERVO_STOWED_POSITION = 0.0;

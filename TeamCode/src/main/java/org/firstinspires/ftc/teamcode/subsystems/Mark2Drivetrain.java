@@ -22,7 +22,7 @@ public class Mark2Drivetrain {
     private DcMotor backLeftMotor;
     private DcMotor backRightMotor;
 
-    // IMU removed — not currently installed on robot.
+    // IMU removed — not currently installed on robot.-+6
     // Restore: add `import com.qualcomm.robotcore.hardware.IMU;`,
     // re-add `import static ...Mark2HardwareMapNames.IMU_SENSOR;`,
     // add `private IMU imu;`, and `imu = hardwareMap.get(IMU.class, IMU_SENSOR);`
@@ -263,7 +263,7 @@ public class Mark2Drivetrain {
     }
 
     /** Maximum power fraction applied during safe / test driving. */
-    private static final double SAFE_DRIVE_POWER_CAP = 0.40;
+    private static final double SAFE_DRIVE_POWER_CAP = 0.99;
 
     /**
      * Drive the robot with full expo/deadzone shaping but capped at

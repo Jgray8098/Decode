@@ -73,7 +73,7 @@ public class Mark2InitialTesting extends OpMode {
 
     // ── Test constants ────────────────────────────────────────────────────────
     /** Motor power used when the right trigger spins the launcher during testing. */
-    private static final double LAUNCHER_TEST_POWER = 0.30;
+    private static final double LAUNCHER_TEST_POWER = 0.60;
     /** How much a single bumper press shifts a servo position. */
     private static final double SERVO_NUDGE_STEP    = 0.02;
 
