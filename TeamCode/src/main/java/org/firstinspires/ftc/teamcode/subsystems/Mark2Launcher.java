@@ -95,6 +95,9 @@ public class Mark2Launcher {
     private Servo hoodPositionServo2;
     private Servo feedLauncherServo;
 
+    /** True when all three servos were successfully initialised. False = motors only. */
+    private final boolean hasServos;
+
     // -------------------------------------------------------------------------
     // Distance → motor power setpoints
     //   Key   = distance to target (inches)
@@ -119,15 +122,40 @@ public class Mark2Launcher {
     // -------------------------------------------------------------------------
     // Constructor
     // -------------------------------------------------------------------------
+
+    /**
+     * Full constructor — requires all motors AND servos to be present in
+     * the hardware configuration.  Use this once all hardware is installed.
+     */
     public Mark2Launcher(HardwareMap hardwareMap) {
-        launcherMotorOne   = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_ONE);
-        launcherMotorTwo   = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_TWO);
-        hoodPositionServo1 = hardwareMap.servo.get(LAUNCHER_SERVO_ONE);
-        hoodPositionServo2 = hardwareMap.servo.get(LAUNCHER_SERVO_TWO);
-        feedLauncherServo  = hardwareMap.servo.get(LAUNCHER_SERVO_THREE);
+        this(hardwareMap, true);
+    }
+
+    /**
+     * Partial constructor for staged hardware bring-up.
+     *
+     * @param hardwareMap the OpMode hardware map
+     * @param hasServos   {@code true}  = full init (motors + servos)<br>
+     *                    {@code false} = motors only; servo fields are left null
+     *                    and every servo call in this class is skipped safely.
+     */
+    public Mark2Launcher(HardwareMap hardwareMap, boolean hasServos) {
+        this.hasServos = hasServos;
+
+        launcherMotorOne = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_ONE);
+        launcherMotorTwo = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_TWO);
+
+        if (hasServos) {
+            hoodPositionServo1 = hardwareMap.servo.get(LAUNCHER_SERVO_ONE);
+            hoodPositionServo2 = hardwareMap.servo.get(LAUNCHER_SERVO_TWO);
+            feedLauncherServo  = hardwareMap.servo.get(LAUNCHER_SERVO_THREE);
+            hoodPositionServo2.setDirection(Servo.Direction.REVERSE);
+            // Servos are intentionally NOT commanded here.
+            // No servo position is assumed safe until the driver confirms safety
+            // in Mark2InitialTesting.init_loop().
+        }
 
         launcherMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
-        hoodPositionServo2.setDirection(Servo.Direction.REVERSE);
 
         launcherMotorOne.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         launcherMotorTwo.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
@@ -140,11 +168,6 @@ public class Mark2Launcher {
         lastPosOne = launcherMotorOne.getCurrentPosition();
         lastPosTwo = launcherMotorTwo.getCurrentPosition();
 
-        // Servos are intentionally NOT commanded here.
-        // No servo position is assumed safe until it has been physically verified
-        // at robot startup (see Mark2InitialTesting.init_loop() confirmation gate).
-        // The first setPosition() call on any servo happens only after the driver
-        // explicitly confirms the robot is safe to operate.
 
         // --- Distance (inches) → LaunchSetpoint (rpm, hoodPosition)  (tune!) ---
         //   rpm          = target launcher-wheel RPM for this shot distance
@@ -183,10 +206,12 @@ public class Mark2Launcher {
         launcherMotorOne.setPower(targetPower);
         launcherMotorTwo.setPower(targetPower);
 
-        // Set hood angle from the interpolated setpoint
-        hoodPositionServo1.setPosition(setpoint.hoodPosition);
-        hoodPositionServo2.setPosition(setpoint.hoodPosition);
-        feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION); // feeder stays back until at speed
+        if (hasServos) {
+            // Set hood angle from the interpolated setpoint
+            hoodPositionServo1.setPosition(setpoint.hoodPosition);
+            hoodPositionServo2.setPosition(setpoint.hoodPosition);
+            feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION); // feeder stays back until at speed
+        }
 
         state = LauncherState.SPINNING_UP;
     }
@@ -208,7 +233,7 @@ public class Mark2Launcher {
 
                 if (measuredRpm >= targetRpm * RPM_READY_FRACTION) {
                     // Launcher is at speed — trigger the feeder servo
-                    feedLauncherServo.setPosition(FEEDER_SERVO_FEED_POSITION);
+                    if (hasServos) feedLauncherServo.setPosition(FEEDER_SERVO_FEED_POSITION);
                     state = LauncherState.FEEDING;
                 }
                 break;
@@ -234,9 +259,11 @@ public class Mark2Launcher {
     public void stop() {
         launcherMotorOne.setPower(0);
         launcherMotorTwo.setPower(0);
-        hoodPositionServo1.setPosition(HOOD_SERVO_RESET_POSITION);
-        hoodPositionServo2.setPosition(HOOD_SERVO_RESET_POSITION);
-        feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
+        if (hasServos) {
+            hoodPositionServo1.setPosition(HOOD_SERVO_RESET_POSITION);
+            hoodPositionServo2.setPosition(HOOD_SERVO_RESET_POSITION);
+            feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
+        }
         state = LauncherState.IDLE;
         targetPower = 0.0;
         targetRpm   = 0.0;
@@ -249,7 +276,7 @@ public class Mark2Launcher {
      * in quick succession by calling {@link #shoot(double)} again immediately.
      */
     public void resetFeeder() {
-        feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
+        if (hasServos) feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
         state = LauncherState.IDLE;
     }
 
@@ -277,6 +304,7 @@ public class Mark2Launcher {
      * @param position Servo position  [0.0 – 1.0].
      */
     public void setHoodPosition(double position) {
+        if (!hasServos) return;
         hoodPositionServo1.setPosition(position);
         hoodPositionServo2.setPosition(position);
     }
@@ -289,6 +317,7 @@ public class Mark2Launcher {
      * @param position Servo position  [0.0 – 1.0].
      */
     public void setFeederPosition(double position) {
+        if (!hasServos) return;
         feedLauncherServo.setPosition(position);
     }
 
@@ -299,10 +328,12 @@ public class Mark2Launcher {
     public double getMeasuredRpm()  { return measuredRpm; }
     public double getTargetRpm()    { return targetRpm; }
     public double getTargetPower()  { return targetPower; }
-    /** Last position sent to both hood servos. */
-    public double getHoodPosition()   { return hoodPositionServo1.getPosition(); }
-    /** Last position sent to the feeder servo. */
-    public double getFeederPosition() { return feedLauncherServo.getPosition(); }
+    /** Last position sent to both hood servos. Returns NaN if servos not installed. */
+    public double getHoodPosition()   { return hasServos ? hoodPositionServo1.getPosition() : Double.NaN; }
+    /** Last position sent to the feeder servo. Returns NaN if servos not installed. */
+    public double getFeederPosition() { return hasServos ? feedLauncherServo.getPosition()  : Double.NaN; }
+    /** Returns {@code true} if servos are present and wired. */
+    public boolean hasServos()        { return hasServos; }
     /** Returns {@code true} once the launcher has reached the ready RPM threshold. */
     public boolean isAtSpeed()      { return measuredRpm >= targetRpm * RPM_READY_FRACTION; }
 
