@@ -155,7 +155,7 @@ public class Mark2Launcher {
             // in Mark2InitialTesting.init_loop().
         }
 
-        launcherMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
+        launcherMotorOne.setDirection(DcMotorSimple.Direction.REVERSE);
 
         launcherMotorOne.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         launcherMotorTwo.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
