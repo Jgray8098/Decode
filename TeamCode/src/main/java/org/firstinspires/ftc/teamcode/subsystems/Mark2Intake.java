@@ -17,6 +17,12 @@ public class Mark2Intake {
     // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
     private static final double INTAKE_POWER                 = .99;
     private static final double INTAKE_HOLD_ARTIFACT_POWER   = .15;
+    /**
+     * Motor two power as a fraction of {@link #INTAKE_POWER} when running in
+     * differential (TeleOp) mode.  Lower speed on motor two reduces wear /
+     * provides a controlled hold while still driving the ball forward.
+     */
+    private static final double INTAKE_MOTOR_TWO_FRACTION    = 1.0 / 3.0;
 
     private static final double INTAKE_SERVO_INIT_POSITION = 0.5;
     private static final double INTAKE_SERVO_INTAKE_POSITION = 0.58;
@@ -41,6 +47,28 @@ public class Mark2Intake {
         intakeMotorOne.setPower(INTAKE_POWER);
         intakeMotorTwo.setPower(INTAKE_POWER);
         setServoPosition(INTAKE_SERVO_INTAKE_POSITION);
+    }
+
+    /**
+     * TeleOp intake mode — motor one runs at full {@link #INTAKE_POWER};
+     * motor two runs at {@link #INTAKE_MOTOR_TWO_FRACTION} of that to provide
+     * differential roller speed.  Servo moves to intake position.
+     */
+    public void PickUpDifferential() {
+        intakeMotorOne.setPower(INTAKE_POWER);
+        intakeMotorTwo.setPower(INTAKE_POWER * INTAKE_MOTOR_TWO_FRACTION);
+        setServoPosition(INTAKE_SERVO_INTAKE_POSITION);
+    }
+
+    /**
+     * Stop motors but move servo to the hold position.
+     * Use this when the Y button is released in TeleOp so the intake
+     * stays in a ready position rather than stowing.
+     */
+    public void HoldPosition() {
+        intakeMotorOne.setPower(0);
+        intakeMotorTwo.setPower(0);
+        setServoPosition(INTAKE_SERVO_HOLD_POSITION);
     }
 
     public void Hold(){

@@ -3,10 +3,6 @@ package org.firstinspires.ftc.teamcode.opmodes;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
-
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
@@ -17,172 +13,152 @@ import java.util.Locale;
 /**
  * Mark2 primary TeleOp.
  *
- * Replaces ColorSensorTele.  All vision (Limelight), color-sensor (ArtifactTracker /
- * MotifStorage), PedroPathing (Follower), and old-mechanism (Flywheel / Indexer /
- * MecanumDrive) dependencies have been removed.  Only the three Mark2 subsystems
- * are used: {@link Mark2Drivetrain}, {@link Mark2Intake}, and {@link Mark2Launcher}.
+ * ── CONTROL MAP ───────────────────────────────────────────────────────────────
  *
- * ── Control scheme ────────────────────────────────────────────────────────────
+ *  Gamepad 1  (Driver)
+ *  ┌──────────────────────────────────────────────────────────────┐
+ *  │  Right stick Y / X  →  translate (forward / strafe)         │
+ *  │  Left  stick X      →  rotate                               │
+ *  │  Left  trigger hold →  snail mode (60 % power cap)          │
+ *  │  Right bumper       →  toggle alliance-flip                  │
+ *  └──────────────────────────────────────────────────────────────┘
  *
- *  Gamepad 1 (driver)
- *  ─────────────────
- *  Left  stick Y / X   Forward / strafe (expo + deadzone applied in Drivetrain)
- *  Right stick X       Rotate
- *
- *  Gamepad 2 (operator)
- *  ────────────────────
- *  Y (held)            Intake — PickUp (full forward power)
- *  X (held)            Intake — Hold   (soft hold power)
- *  A (held) / default  Intake — Stop   (motors off, servo stow)
- *
- *  Left  bumper (held) Aim robot at goal: calls drivetrain.aim(GOAL_X, GOAL_Y)
- *                      each loop.  Normal drive is suppressed while aiming.
- *  Right bumper (edge) Fire: compute live distance from odometry to goal, call
- *                      launcher.shoot(distance) — uses the InterpolatingTreeMap
- *                      to select the correct RPM and hood angle automatically.
- *
- *  B (edge)            Full launcher stop (motors off, servos retract → IDLE)
- *
- *  D-pad Up   (edge)   Fallback: shoot at CLOSE_SHOT_DISTANCE preset
- *  D-pad Down (edge)   Fallback: shoot at FAR_SHOT_DISTANCE preset
- *
- *  After each shot the feeder is automatically retracted and the motors keep
- *  spinning (resetFeeder()) so the operator can fire the next ball immediately
- *  with another RB press.  Press B to spin everything down between volleys.
+ *  Gamepad 2  (Operator)
+ *  ┌─────────────────────────────────────────────────────────────────────────┐
+ *  │  INTAKE                                                                 │
+ *  │    Y  (hold)        →  intake forward (motor 1 full, motor 2 × 1/3)    │
+ *  │    (release Y)      →  motors stop, servo moves to hold position        │
+ *  │                                                                         │
+ *  │  LAUNCHER                                                               │
+ *  │    Dpad Up          →  select CLOSE shot distance preset                │
+ *  │    Dpad Down        →  select FAR shot distance preset                  │
+ *  │    B  (press)       →  fire at selected distance                        │
+ *  │                                                                         │
+ *  │  FEEDER (manual, only when launcher is IDLE)                            │
+ *  │    Left stick X     →  feeder servo position                            │
+ *  │                         full left  = FEEDER_MIN_POS (0.05)             │
+ *  │                         full right = FEEDER_MAX_POS (0.95)             │
+ *  └─────────────────────────────────────────────────────────────────────────┘
  *
  * ── TODO ──────────────────────────────────────────────────────────────────────
- *  • Set GOAL_X / GOAL_Y to the real field coordinates of the launch target.
- *  • Tune CLOSE_SHOT_DISTANCE and FAR_SHOT_DISTANCE fallback presets.
- *  • Verify Pinpoint config name matches the robot controller ("pinpoint").
+ *  • Tune CLOSE_SHOT_DISTANCE and FAR_SHOT_DISTANCE to real field distances.
+ *  • Tune FEEDER_MIN_POS / FEEDER_MAX_POS to physical servo limits.
+ *  • Re-enable Pinpoint odometry once hardware is installed.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @TeleOp(name = "Mark2 TeleOp", group = "Mark2")
 public class Mark2TeleOp extends OpMode {
 
-    // ── Hardware config name — see Mark2HardwareMapNames ──────────────────────
-
-    // ── Launch target field position (inches) — TUNE ─────────────────────────
-    /**
-     * Field X coordinate of the launch target (goal / basket).
-     * Used by the auto-aim (left bumper) and live-distance shot (right bumper).
-     * Update both values once the real target position is known.
-     */
-    private static final double GOAL_X = 72.0;   // TUNE — center of field as placeholder
-    private static final double GOAL_Y = 72.0;   // TUNE
-
-    // ── Fallback shot-distance presets (inches) — D-pad ─────────────────────
-    /** D-pad Up fallback: close shot preset. */
-    private static final double CLOSE_SHOT_DISTANCE =  60.0;   // TUNE
-    /** D-pad Down fallback: far / long shot preset. */
+    // ── Launcher distance presets (inches) ────────────────────────────────────
+    /** Dpad Up preset — close shot. */
+    private static final double CLOSE_SHOT_DISTANCE = 60.0;    // TUNE
+    /** Dpad Down preset — far / long shot. */
     private static final double FAR_SHOT_DISTANCE   = 120.0;   // TUNE
 
+    // ── Feeder servo manual-control limits ────────────────────────────────────
+    /** Minimum (left-stop) position for manual feeder servo control. */
+    private static final double FEEDER_MIN_POS = 0.05;
+    /** Maximum (right-stop) position for manual feeder servo control. */
+    private static final double FEEDER_MAX_POS = 0.95;
+    /** Stick deadzone applied to the feeder control axis on GP2. */
+    private static final double FEEDER_STICK_DEADZONE = 0.05;
+
     // ── Subsystems ────────────────────────────────────────────────────────────
-    private Mark2Drivetrain mark2Drivetrain;
-    private Mark2Intake mark2Intake;
-    private Mark2Launcher mark2Launcher;
+    private Mark2Drivetrain drivetrain;
+    private Mark2Intake     intake;
+    private Mark2Launcher   launcher;
 
     // ── Loop timing ───────────────────────────────────────────────────────────
     private long lastNs;
 
+    // ── Match state ───────────────────────────────────────────────────────────
+    /** Distance selected by the operator via Dpad.  Defaults to close preset. */
+    private double selectedDistance = CLOSE_SHOT_DISTANCE;
+
     // ── Button edge-detection ─────────────────────────────────────────────────
-    private boolean prevRB2      = false;
+    private boolean prevRB1      = false;
     private boolean prevDpadUp   = false;
     private boolean prevDpadDown = false;
     private boolean prevB2       = false;
 
-    // ── Runtime state ─────────────────────────────────────────────────────────
-    /** Distance to goal computed at the moment right bumper was pressed. */
-    private double lastShotDistance = 0.0;
-    /** True while left bumper is held and aim() is actively running. */
-    private boolean aimActive = false;
-
     // ═════════════════════════════════════════════════════════════════════════
-    // OpMode lifecycle
-    // ═════════════════════════════════════════════════════════════════════════
-
     @Override
     public void init() {
-        mark2Drivetrain = new Mark2Drivetrain(hardwareMap);   // no Pinpoint — not yet on robot
-        mark2Intake = new Mark2Intake(hardwareMap);
-        mark2Launcher = new Mark2Launcher(hardwareMap);
+        drivetrain = new Mark2Drivetrain(hardwareMap);   // no Pinpoint — not yet on robot
+        intake     = new Mark2Intake(hardwareMap);
+        launcher   = new Mark2Launcher(hardwareMap);     // full hardware (all servos)
 
         lastNs = System.nanoTime();
 
         telemetry.addLine("Mark2 TeleOp — Initialized");
-        telemetry.addLine("GP1: Drive    GP2: Intake + Launcher");
-        telemetry.addLine("─────────────────────────────────────");
-        telemetry.addLine("GP2 Y=PickUp  X=Hold  A=Stop");
-        telemetry.addLine("GP2 LB=Aim  RB=Fire(dist)  B=StopLauncher");
-        telemetry.addLine("GP2 DUp=CloseShot(fallback)  DDn=FarShot(fallback)");
+        telemetry.addLine("GP1: Drive   GP2: Intake + Launcher");
+        telemetry.addLine("GP2  Y=Intake  DUp/DDn=SelectDist  B=Fire");
+        telemetry.addLine("GP2  LeftStickX=Feeder (IDLE only)");
         telemetry.update();
     }
 
+    // ═════════════════════════════════════════════════════════════════════════
     @Override
     public void loop() {
+
         // ── Timing ────────────────────────────────────────────────────────────
         long now = System.nanoTime();
         double dt = (now - lastNs) / 1.0e9;
         lastNs = now;
 
-        // ── Drive / Aim ───────────────────────────────────────────────────────
-        // Left bumper held → aim robot at goal (suppresses normal drive).
-        // Releasing left bumper returns full control to the driver instantly.
-        aimActive = gamepad2.left_bumper;
-        if (aimActive) {
-            mark2Drivetrain.aim(GOAL_X, GOAL_Y);
-        } else {
-            mark2Drivetrain.driveTeleop(gamepad1);
-        }
+        // ── GP1 Drivetrain ────────────────────────────────────────────────────
+        boolean rb1 = gamepad1.right_bumper;
+        if (rb1 && !prevRB1) drivetrain.toggleAllianceFlip();
+        prevRB1 = rb1;
 
-        // ── Intake ────────────────────────────────────────────────────────────
-        //   Priority: Y (PickUp) > X (Hold) > default (Stop)
+        drivetrain.driveSafe(gamepad1);   // right stick = translate, left stick X = rotate
+                                          // left trigger = snail mode (60 % cap)
+
+        // ── GP2 Intake ────────────────────────────────────────────────────────
         if (gamepad2.y) {
-            mark2Intake.PickUp();
-        } else if (gamepad2.x) {
-            mark2Intake.Hold();
+            // Motor 1 at full INTAKE_POWER, motor 2 at 1/3 power, servo to intake position
+            intake.PickUpDifferential();
         } else {
-            mark2Intake.Stop();
+            // Servo moves to hold position; motors stop
+            intake.HoldPosition();
         }
 
-        // ── Launcher — button edge detection ─────────────────────────────────
-        boolean rb2      = gamepad2.right_bumper;
+        // ── GP2 Launcher — distance selection (Dpad) ─────────────────────────
         boolean dpadUp   = gamepad2.dpad_up;
         boolean dpadDown = gamepad2.dpad_down;
-        boolean b2       = gamepad2.b;
 
-        // Right bumper — live-distance shot using InterpolatingTreeMap
-        if (rb2 && !prevRB2) {
-            lastShotDistance = distanceToGoal();
-            mark2Launcher.shoot(lastShotDistance);
-        }
+        if (dpadUp   && !prevDpadUp)   selectedDistance = CLOSE_SHOT_DISTANCE;
+        if (dpadDown && !prevDpadDown) selectedDistance = FAR_SHOT_DISTANCE;
 
-        // D-pad fallbacks
-        if (dpadUp && !prevDpadUp) {
-            lastShotDistance = CLOSE_SHOT_DISTANCE;
-            mark2Launcher.shoot(CLOSE_SHOT_DISTANCE);
-        }
-        if (dpadDown && !prevDpadDown) {
-            lastShotDistance = FAR_SHOT_DISTANCE;
-            mark2Launcher.shoot(FAR_SHOT_DISTANCE);
-        }
-
-        // B — full stop
-        if (b2 && !prevB2) {
-            mark2Launcher.stop();
-        }
-
-        prevRB2      = rb2;
         prevDpadUp   = dpadUp;
         prevDpadDown = dpadDown;
-        prevB2       = b2;
+
+        // ── GP2 Launcher — fire (B press) ────────────────────────────────────
+        boolean b2 = gamepad2.b;
+        if (b2 && !prevB2) {
+            launcher.shoot(selectedDistance);
+        }
+        prevB2 = b2;
+
+        // ── GP2 Feeder servo (manual, only when launcher is IDLE) ─────────────
+        if (launcher.getState() == LauncherState.IDLE) {
+            double stickX = gamepad2.left_stick_x;
+            if (Math.abs(stickX) > FEEDER_STICK_DEADZONE) {
+                // Map [-1, +1]  →  [FEEDER_MIN_POS, FEEDER_MAX_POS]
+                double feederPos = (stickX + 1.0) / 2.0
+                        * (FEEDER_MAX_POS - FEEDER_MIN_POS)
+                        + FEEDER_MIN_POS;
+                launcher.setFeederPosition(feederPos);
+            }
+        }
 
         // ── Launcher state machine ────────────────────────────────────────────
-        mark2Launcher.update(dt);
+        launcher.update(dt);
 
-        // Auto-retract feeder, keep motors spinning → ready for next shot immediately.
-        // Press B to shut everything down between volleys.
-        if (mark2Launcher.getState() == LauncherState.DONE) {
-            mark2Launcher.resetFeeder();
+        // Auto-retract feeder once shot is complete; keeps motors spinning so
+        // the operator can fire again immediately with another B press.
+        if (launcher.getState() == LauncherState.DONE) {
+            launcher.resetFeeder();
         }
 
         // ── Telemetry ─────────────────────────────────────────────────────────
@@ -190,53 +166,34 @@ public class Mark2TeleOp extends OpMode {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Helpers
-    // ═════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Compute the straight-line distance (inches) from the robot's current
-     * odometry position to {@link #GOAL_X} / {@link #GOAL_Y}.
-     */
-    private double distanceToGoal() {
-        Pose2D pose = mark2Drivetrain.getPose();
-        double dx = GOAL_X - pose.getX(DistanceUnit.INCH);
-        double dy = GOAL_Y - pose.getY(DistanceUnit.INCH);
-        return Math.hypot(dx, dy);
-    }
-
     private void showTelemetry() {
-        // Pose + distance to goal
-        Pose2D pose = mark2Drivetrain.getPose();
-        telemetry.addData("X (in)",          "%.2f", pose.getX(DistanceUnit.INCH));
-        telemetry.addData("Y (in)",          "%.2f", pose.getY(DistanceUnit.INCH));
-        telemetry.addData("Heading",         "%.1f°", pose.getHeading(AngleUnit.DEGREES));
-        telemetry.addData("Dist to goal",    String.format(Locale.US, "%.1f in", distanceToGoal()));
-        telemetry.addData("Aiming",          aimActive ? "YES — rotating to goal" : "no");
+        telemetry.addLine("── Driver ──────────────────────────");
+        telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped()
+                ? "FLIPPED (RB to restore)" : "normal  (RB to flip)");
+        telemetry.addData("  Snail mode", gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
 
-        telemetry.addLine("─── Launcher ───────────────────────────");
-        telemetry.addData("State",            mark2Launcher.getState());
-        telemetry.addData("Last shot dist",   String.format(Locale.US, "%.1f in", lastShotDistance));
-        telemetry.addData("Target RPM",       String.format(Locale.US, "%.0f", mark2Launcher.getTargetRpm()));
-        telemetry.addData("Measured RPM",     String.format(Locale.US, "%.0f", mark2Launcher.getMeasuredRpm()));
-        telemetry.addData("Target Power",     String.format(Locale.US, "%.3f", mark2Launcher.getTargetPower()));
-        telemetry.addData("Hood pos",         String.format(Locale.US, "%.3f", nanToZero(mark2Launcher.getHoodPosition())));
-        telemetry.addData("Feeder pos",       String.format(Locale.US, "%.3f", nanToZero(mark2Launcher.getFeederPosition())));
-        telemetry.addData("At speed?",        mark2Launcher.isAtSpeed());
+        telemetry.addLine("── Launcher ────────────────────────");
+        telemetry.addData("  State",         launcher.getState().name());
+        telemetry.addData("  Selected dist", String.format(Locale.US, "%.0f in  (DUp=%.0f  DDn=%.0f)",
+                selectedDistance, CLOSE_SHOT_DISTANCE, FAR_SHOT_DISTANCE));
+        telemetry.addData("  Target RPM",    String.format(Locale.US, "%.0f", launcher.getTargetRpm()));
+        telemetry.addData("  Measured RPM",  String.format(Locale.US, "%.0f", launcher.getMeasuredRpm()));
+        telemetry.addData("  At speed",      launcher.isAtSpeed() ? "YES" : "no");
+        telemetry.addData("  Hood pos",      String.format(Locale.US, "%.3f",
+                nanToZero(launcher.getHoodPosition())));
+        telemetry.addData("  Feeder pos",    String.format(Locale.US, "%.3f",
+                nanToZero(launcher.getFeederPosition())));
 
-        telemetry.addLine("─── Intake servo ───────────────────────");
-        telemetry.addData("Intake servo",     String.format(Locale.US, "%.3f", nanToZero(mark2Intake.getServoPosition())));
-
-        telemetry.addLine("─── Controls ───────────────────────────");
-        telemetry.addLine("GP2 Y=PickUp  X=Hold  A=Stop");
-        telemetry.addLine("GP2 LB=Aim  RB=Fire  B=StopLauncher");
-        telemetry.addLine("GP2 DUp/DDn=Fallback presets");
+        telemetry.addLine("── Intake ──────────────────────────");
+        telemetry.addData("  Servo pos",     String.format(Locale.US, "%.3f",
+                intake.getServoPosition()));
+        telemetry.addData("  Running",       gamepad2.y ? "FORWARD (differential)" : "stopped/hold");
 
         telemetry.update();
     }
 
-    /** Guard against the SDK returning Double.NaN before any setPosition() is called. */
-    private static double nanToZero(double value) {
-        return Double.isNaN(value) ? 0.0 : value;
+    private static double nanToZero(double v) {
+        return Double.isNaN(v) ? 0.0 : v;
     }
 }
 
