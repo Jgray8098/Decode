@@ -11,9 +11,9 @@ import org.firstinspires.ftc.teamcode.utility.LaunchSetpoint;
 
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_MOTOR_ONE;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_MOTOR_TWO;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_SERVO_ONE;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_SERVO_TWO;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_SERVO_THREE;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.HOOD_SERVO;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.GATE_SERVO_LEFT;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.GATE_SERVO_RIGHT;
 
 
 /**
@@ -40,7 +40,7 @@ public class Mark2Launcher {
         IDLE,
         /** Motors running; waiting for measured RPM to reach the ready threshold. */
         SPINNING_UP,
-        /** RPM threshold met; feeder servo (servoThree) has been triggered. */
+        /** RPM threshold met; feeder gate servos have been triggered. */
         FEEDING,
         /** Shot complete. Call stop() or resetFeeder() to return to IDLE. */
         DONE
@@ -51,12 +51,13 @@ public class Mark2Launcher {
     // -------------------------------------------------------------------------
     // Servo positions  (tune!)
     // -------------------------------------------------------------------------
-    /** Hood servo resting position (servos one & two) when launcher is idle. */
+    /** Hood servo resting position when launcher is idle. */
     private static final double HOOD_SERVO_RESET_POSITION  = 0.0;
-    /** ServoThree "push" position — feeds ball into launch mechanism. */
-    private static final double FEEDER_SERVO_FEED_POSITION = 1.0;
-    /** ServoThree retracted / resting position. */
-    private static final double FEEDER_SERVO_IDLE_POSITION = 0.0;
+    /** Gate servos "push" position — feeds ball into launch mechanism. */
+    private static final double FEEDER_SERVO_FEED_POSITION = 0.24;
+    /** Gate servos retracted / resting position. */
+    private static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+
 
     /** Encoder ticks per output-shaft revolution for your GoBilda motor model. */
     private static final double MOTOR_TICKS_PER_REV = 537.7;   // 312 RPM Yellow Jacket — change to match your model
@@ -91,9 +92,9 @@ public class Mark2Launcher {
     // -------------------------------------------------------------------------
     private DcMotorEx launcherMotorOne;
     private DcMotorEx launcherMotorTwo;
-    private Servo hoodPositionServo1;
-    private Servo hoodPositionServo2;
-    private Servo feedLauncherServo;
+    private Servo hoodPositionServo;
+    private Servo gateServoLeft;
+    private Servo gateServoRight;
 
     /** True when all three servos were successfully initialised. False = motors only. */
     private final boolean hasServos;
@@ -146,10 +147,10 @@ public class Mark2Launcher {
         launcherMotorTwo = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_TWO);
 
         if (hasServos) {
-            hoodPositionServo1 = hardwareMap.servo.get(LAUNCHER_SERVO_ONE);
-            hoodPositionServo2 = hardwareMap.servo.get(LAUNCHER_SERVO_TWO);
-            feedLauncherServo  = hardwareMap.servo.get(LAUNCHER_SERVO_THREE);
-            hoodPositionServo2.setDirection(Servo.Direction.REVERSE);
+            hoodPositionServo = hardwareMap.servo.get(HOOD_SERVO);
+            gateServoLeft     = hardwareMap.servo.get(GATE_SERVO_LEFT);
+            gateServoRight    = hardwareMap.servo.get(GATE_SERVO_RIGHT);
+
             // Servos are intentionally NOT commanded here.
             // No servo position is assumed safe until the driver confirms safety
             // in Mark2InitialTesting.init_loop().
@@ -171,7 +172,7 @@ public class Mark2Launcher {
 
         // --- Distance (inches) → LaunchSetpoint (rpm, hoodPosition)  (tune!) ---
         //   rpm          = target launcher-wheel RPM for this shot distance
-        //   hoodPosition = servo position [0.0–1.0] for servos one & two
+        //   hoodPosition = servo position [0.0–1.0] for hood servo
         //                  (0.0 = lowest angle, 1.0 = highest angle)
         powerMap.put(24.0,  new LaunchSetpoint(2000.0, 0.10));
         powerMap.put(48.0,  new LaunchSetpoint(2500.0, 0.20));
@@ -185,63 +186,40 @@ public class Mark2Launcher {
     // Public API
     // -------------------------------------------------------------------------
 
-    /**
-     * Begin a shot sequence for the given distance.
-     * The motors will spin up and servoThree will fire automatically once the
-     * launcher reaches speed.  Call {@link #update(double)} every loop iteration.
-     *
-     * <p>Calling shoot() while a shot is already in progress is a no-op;
-     * call {@link #stop()} first to reset.</p>
-     *
-     * @param distanceFromTargetInches distance to the target in inches.
-     */
     public void shoot(double distanceFromTargetInches) {
         if (state != LauncherState.IDLE && state != LauncherState.DONE) return;
 
         LaunchSetpoint setpoint = powerMap.get(distanceFromTargetInches);
         targetRpm   = setpoint.rpm;
-        // Derive open-loop power proportionally from the target RPM.
         targetPower = Math.min(targetRpm / LAUNCHER_FREE_RPM, 1.0);
 
         launcherMotorOne.setPower(targetPower);
         launcherMotorTwo.setPower(targetPower);
 
         if (hasServos) {
-            // Set hood angle from the interpolated setpoint
-            hoodPositionServo1.setPosition(setpoint.hoodPosition);
-            hoodPositionServo2.setPosition(setpoint.hoodPosition);
-            feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION); // feeder stays back until at speed
+            hoodPositionServo.setPosition(setpoint.hoodPosition);
+            setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
         }
 
         state = LauncherState.SPINNING_UP;
     }
 
-    /**
-     * Drive the launcher state machine.  <b>Must be called every OpMode loop iteration.</b>
-     *
-     * @param dtSec seconds elapsed since the previous loop call.
-     *              Compute with {@code (System.nanoTime() - lastNs) / 1e9}.
-     */
     public void update(double dtSec) {
         switch (state) {
 
             case SPINNING_UP: {
-                // Measure average RPM across both motors
                 double tpsOne = estimateTps(launcherMotorOne, true,  dtSec);
                 double tpsTwo = estimateTps(launcherMotorTwo, false, dtSec);
                 measuredRpm = (tpsToRpm(tpsOne) + tpsToRpm(tpsTwo)) / 2.0;
 
                 if (measuredRpm >= targetRpm * RPM_READY_FRACTION) {
-                    // Launcher is at speed — trigger the feeder servo
-                    if (hasServos) feedLauncherServo.setPosition(FEEDER_SERVO_FEED_POSITION);
+                    if (hasServos) setFeederPosition(FEEDER_SERVO_FEED_POSITION);
                     state = LauncherState.FEEDING;
                 }
                 break;
             }
 
             case FEEDING:
-                // Feeder servo command has been sent; mark the shot as complete.
-                // The motors keep running so the caller can decide when to stop.
                 state = LauncherState.DONE;
                 break;
 
@@ -252,17 +230,12 @@ public class Mark2Launcher {
         }
     }
 
-    /**
-     * Stop motors, retract all servos, and return to {@link LauncherState#IDLE}.
-     * Call this after the shot is confirmed complete (state == DONE).
-     */
     public void stop() {
         launcherMotorOne.setPower(0);
         launcherMotorTwo.setPower(0);
         if (hasServos) {
-            hoodPositionServo1.setPosition(HOOD_SERVO_RESET_POSITION);
-            hoodPositionServo2.setPosition(HOOD_SERVO_RESET_POSITION);
-            feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
+            hoodPositionServo.setPosition(HOOD_SERVO_RESET_POSITION);
+            setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
         }
         state = LauncherState.IDLE;
         targetPower = 0.0;
@@ -270,87 +243,44 @@ public class Mark2Launcher {
         measuredRpm = 0.0;
     }
 
-    /**
-     * Retract the feeder servo and return to {@link LauncherState#IDLE} without
-     * stopping the launch motors.  Useful when you want to fire multiple balls
-     * in quick succession by calling {@link #shoot(double)} again immediately.
-     */
     public void resetFeeder() {
-        if (hasServos) feedLauncherServo.setPosition(FEEDER_SERVO_IDLE_POSITION);
+        if (hasServos) setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
         state = LauncherState.IDLE;
     }
 
-    // -------------------------------------------------------------------------
-    // Calibration helpers  (use only from test OpModes — bypass the state machine)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Spin both launcher motors at the given power fraction without engaging the
-     * state machine.  Intended for bench or initial testing only.
-     * Call {@link #stop()} to halt the motors when finished.
-     *
-     * @param power Motor power  [0.0 – 1.0].
-     */
     public void testSpinMotors(double power) {
         launcherMotorOne.setPower(power);
         launcherMotorTwo.setPower(power);
     }
 
-    /**
-     * Directly command both hood servos (ServoOne &amp; ServoTwo) to a position.
-     * Use this to find the correct {@code hoodPosition} values for the
-     * {@link InterpolatingTreeMap} setpoints.
-     *
-     * @param position Servo position  [0.0 – 1.0].
-     */
     public void setHoodPosition(double position) {
         if (!hasServos) return;
-        hoodPositionServo1.setPosition(position);
-        hoodPositionServo2.setPosition(position);
+        hoodPositionServo.setPosition(position);
     }
 
-    /**
-     * Directly command the feeder servo (ServoThree) to a position.
-     * Use this to find {@code FEEDER_SERVO_FEED_POSITION} and
-     * {@code FEEDER_SERVO_IDLE_POSITION}.
-     *
-     * @param position Servo position  [0.0 – 1.0].
-     */
     public void setFeederPosition(double position) {
         if (!hasServos) return;
-        feedLauncherServo.setPosition(position);
+        gateServoLeft.setPosition(position);
+        gateServoRight.setPosition(position);
     }
 
-    // -------------------------------------------------------------------------
-    // Telemetry / state getters
-    // -------------------------------------------------------------------------
     public LauncherState getState()        { return state; }
     public double getMeasuredRpm()  { return measuredRpm; }
     public double getTargetRpm()    { return targetRpm; }
     public double getTargetPower()  { return targetPower; }
-    /** Last position sent to both hood servos. Returns NaN if servos not installed. */
-    public double getHoodPosition()   { return hasServos ? hoodPositionServo1.getPosition() : Double.NaN; }
-    /** Last position sent to the feeder servo. Returns NaN if servos not installed. */
-    public double getFeederPosition() { return hasServos ? feedLauncherServo.getPosition()  : Double.NaN; }
+    /** Last position sent to hood servo. Returns NaN if servos not installed. */
+    public double getHoodPosition()   { return hasServos ? hoodPositionServo.getPosition() : Double.NaN; }
+    /** Last position sent to the feeder gate servos. Returns NaN if servos not installed. */
+    public double getFeederPosition() { return hasServos ? gateServoLeft.getPosition()  : Double.NaN; }
     /** Returns {@code true} if servos are present and wired. */
     public boolean hasServos()        { return hasServos; }
     /** Returns {@code true} once the launcher has reached the ready RPM threshold. */
     public boolean isAtSpeed()      { return measuredRpm >= targetRpm * RPM_READY_FRACTION; }
 
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
-
-    /**
-     * Estimate motor shaft velocity in ticks/sec.
-     * Prefers the SDK {@code getVelocity()} reading; falls back to a
-     * tick-delta calculation if the control hub returns zero.
-     */
     private double estimateTps(DcMotorEx motor, boolean isMotorOne, double dtSec) {
         double v = motor.getVelocity();
         if (Math.abs(v) > 1e-3) return Math.abs(v);
 
-        // Fallback: manual tick delta
         int pos    = motor.getCurrentPosition();
         int last   = isMotorOne ? lastPosOne : lastPosTwo;
         int dTicks = pos - last;
@@ -358,10 +288,7 @@ public class Mark2Launcher {
         return Math.abs(dTicks / Math.max(dtSec, 1e-4));
     }
 
-    /** Convert GoBilda output-shaft ticks/sec → launcher-wheel RPM. */
     private static double tpsToRpm(double tps) {
-        // tps is at the motor OUTPUT shaft (GoBilda encoder is post-gearbox).
-        // Convert to output-shaft RPM, then scale by the external gear ratio.
         return (tps * 60.0 / MOTOR_TICKS_PER_REV) * EXTERNAL_GEAR_RATIO;
     }
 }

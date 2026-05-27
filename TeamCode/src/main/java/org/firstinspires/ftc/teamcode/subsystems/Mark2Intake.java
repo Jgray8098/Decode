@@ -5,45 +5,54 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.INTAKE_MOTOR_ONE;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.INTAKE_MOTOR_TWO;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.INTAKE_SERVO;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.*;
 
 public class Mark2Intake {
     private DcMotor intakeMotorOne;
     private DcMotor intakeMotorTwo;
-    private Servo intakeServo;
+
+    private Servo intakeServoLeft;
+    private Servo intakeServoRight;
+
     // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
     private static final double INTAKE_POWER                 = .99;
     private static final double INTAKE_HOLD_ARTIFACT_POWER   = .15;
-    private static final double INTAKE_SERVO_INTAKE_POSITION = 0.0;
-    private static final double INTAKE_SERVO_STOWED_POSITION = 0.0;
-    private static final double INTAKE_SERVO_HOLD_POSITION   = 0.0;
+
+    private static final double INTAKE_SERVO_INIT_POSITION = 0.5;
+    private static final double INTAKE_SERVO_INTAKE_POSITION = 0.58;
+    private static final double INTAKE_SERVO_STOWED_POSITION = 0.34;
+    private static final double INTAKE_SERVO_HOLD_POSITION   = 0.68;
+
+    private double intakeServoPosition = INTAKE_SERVO_INIT_POSITION;
 
     public Mark2Intake(HardwareMap hardwareMap){
         intakeMotorOne  = hardwareMap.dcMotor.get(INTAKE_MOTOR_ONE);
         intakeMotorTwo = hardwareMap.dcMotor.get(INTAKE_MOTOR_TWO);
-        intakeServo = hardwareMap.servo.get(INTAKE_SERVO);
+
+        intakeServoLeft = hardwareMap.servo.get(INTAKE_SERVO_LEFT);
+        intakeServoRight = hardwareMap.servo.get(INTAKE_SERVO_RIGHT);
 
         intakeMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        setServoPosition(INTAKE_SERVO_INIT_POSITION);
     }
 
     public void PickUp(){
         intakeMotorOne.setPower(INTAKE_POWER);
         intakeMotorTwo.setPower(INTAKE_POWER);
-        intakeServo.setPosition(INTAKE_SERVO_INTAKE_POSITION);
+        setServoPosition(INTAKE_SERVO_INTAKE_POSITION);
     }
 
     public void Hold(){
         intakeMotorOne.setPower(INTAKE_HOLD_ARTIFACT_POWER);
         intakeMotorTwo.setPower(INTAKE_HOLD_ARTIFACT_POWER);
-        intakeServo.setPosition(INTAKE_SERVO_HOLD_POSITION);
+        setServoPosition(INTAKE_SERVO_HOLD_POSITION);
     }
 
     public void Stop(){
         intakeMotorOne.setPower(0);
         intakeMotorTwo.setPower(0);
-        intakeServo.setPosition(INTAKE_SERVO_STOWED_POSITION);
+        //setServoPosition(INTAKE_SERVO_STOWED_POSITION);
     }
 
     /** Run intake motors in reverse — useful for unjamming or testing motor direction. */
@@ -61,11 +70,17 @@ public class Mark2Intake {
      * @param position Servo position  [0.0 – 1.0].
      */
     public void setServoPosition(double position) {
-        intakeServo.setPosition(position);
+        intakeServoPosition = clamp(position, 0.0, 1.0);
+        intakeServoLeft.setPosition(intakeServoPosition);
+        intakeServoRight.setPosition(1.0 - intakeServoPosition);
     }
 
     /** Returns the last commanded intake servo position (for telemetry). */
     public double getServoPosition() {
-        return intakeServo.getPosition();
+        return intakeServoPosition;
+    }
+
+    private static double clamp(double value, double min, double max)
+    {return Math.max(min, Math.min(max, value));
     }
 }

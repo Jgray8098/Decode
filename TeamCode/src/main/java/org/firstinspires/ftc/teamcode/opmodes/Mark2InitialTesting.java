@@ -2,14 +2,18 @@ package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import java.util.Locale;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
+
+import java.util.Locale;
+
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.*;
 
 /**
  * Mark2InitialTesting
@@ -20,52 +24,59 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
  * positions.
  *
  * ── STARTUP SAFETY ───────────────────────────────────────────────────────────
- *  On INIT the subsystem constructors are called.  No servo is moved until
- *  the driver physically inspects the robot and presses GP1 START.
+ *  On INIT the subsystem constructors are called.  Intake, launcher, and turret
+ *  servos are moved to their known center positions.
  *
  * ── HARDWARE STATUS ──────────────────────────────────────────────────────────
  *  Drivetrain  : motors LIVE  (no Pinpoint / IMU)
- *  Intake      : motors + servo LIVE
- *  Launcher    : motors LIVE  — servos NOT installed, all servo calls disabled
+ *  Intake      : motors + dual arm servos LIVE
+ *  Launcher    : motors + hood servo + dual gate servos LIVE
+ *  Turret Aim  : dual aim servos LIVE
  *
  * ── CONTROL MAP ──────────────────────────────────────────────────────────────
  *
- *  Gamepad 1  (Drivetrain — capped at 40 % power)
+ *  Gamepad 1  (Drivetrain — capped at safe power inside Mark2Drivetrain)
  *  ┌─────────────────────────────────────────────────────┐
  *  │  Left  stick Y / X  →  translate (forward / strafe) │
  *  │  Right stick X      →  rotate                       │
+ *  │  START              →  confirm safety during INIT   │
  *  └─────────────────────────────────────────────────────┘
  *
- *  Gamepad 2  (Intake + Launcher motors)
+ *  Gamepad 2  (Intake + Launcher + Turret Aim)
  *  ┌─────────────────────────────────────────────────────────────────────────┐
  *  │  INTAKE                                                                 │
  *  │    Y  (hold)        →  intake forward (PickUp)                          │
  *  │    A  (hold)        →  intake reverse                                   │
  *  │    (neither)        →  intake stopped                                   │
- *  │    LB  press        →  intake servo position  − 0.02  (nudge down)      │
- *  │    RB  press        →  intake servo position  + 0.02  (nudge up)        │
+ *  │    LB  press        →  intake servos position  − 0.02  (nudge down)     │
+ *  │    RB  press        →  intake servos position  + 0.02  (nudge up)       │
  *  │                                                                         │
  *  │  LAUNCHER MOTORS                                                        │
- *  │    Right trigger > 0.5  (hold)  →  spin motors at 30 %                 │
+ *  │    Right trigger > 0.5  (hold)  →  spin motors at test power            │
  *  │    (trigger released)           →  motors stop                          │
  *  │                                                                         │
- *  │  LAUNCHER SERVOS  [DISABLED — hardware not yet installed]               │
- *  │    Dpad Up/Down         →  hood servo nudge    (disabled)               │
- *  │    Dpad Right/Left      →  feeder servo nudge  (disabled)               │
+ *  │  LAUNCHER SERVOS                                                        │
+ *  │    Dpad Up/Down         →  hood servo nudge                             │
+ *  │    Dpad Right/Left      →  gate servos nudge                            │
+ *  │                                                                         │
+ *  │  TURRET AIM                                                             │
+ *  │    Left stick X         →  aim servos position                          │
+ *  │                           full left = 0.0, center = 0.5, right = 1.0    │
  *  └─────────────────────────────────────────────────────────────────────────┘
  *
  * ── TUNING WORKFLOW ──────────────────────────────────────────────────────────
  *  1. Use right trigger to verify launcher motor direction at low power.
  *  2. Use LB/RB to find intake servo positions.
- *  3. Once launcher servos are installed, change hasServos=false → true and
- *     uncomment the Dpad servo nudge blocks below.
+ *  3. Use Dpad Up/Down to find hood servo positions.
+ *  4. Use Dpad Left/Right to find gate servo positions.
+ *  5. Use GP2 left stick X to verify turret aim servo travel.
  */
 @TeleOp(name = "Mark2InitialTesting", group = "Test")
 public class Mark2InitialTesting extends OpMode {
 
     // ── Subsystems ────────────────────────────────────────────────────────────
     private Mark2Launcher launcher;
-    private Mark2Intake   intake;
+    private Mark2Intake intake;
     private Mark2Drivetrain drivetrain;
 
     // ── Hardware config note ──────────────────────────────────────────────────
@@ -74,13 +85,16 @@ public class Mark2InitialTesting extends OpMode {
     // ── Test constants ────────────────────────────────────────────────────────
     /** Motor power used when the right trigger spins the launcher during testing. */
     private static final double LAUNCHER_TEST_POWER = 0.60;
-    /** How much a single bumper press shifts a servo position. */
-    private static final double SERVO_NUDGE_STEP    = 0.02;
+    /** How much a single bumper or dpad press shifts a servo position. */
+    private static final double SERVO_NUDGE_STEP = 0.02;
+
+    /** Safe centered position used during initial bring-up. */
+    private static final double SERVO_CENTER_POS = 0.50;
 
     // ── Servo position tracking ───────────────────────────────────────────────
-    private double hoodServoPos   = 0.0;   // tracking only — servos not installed
-    private double feederServoPos = 0.0;   // tracking only — servos not installed
-    private double intakeServoPos = 0.0;
+    private double hoodServoPos = SERVO_CENTER_POS;
+    private double feederServoPos = SERVO_CENTER_POS;
+    private double intakeServoPos = SERVO_CENTER_POS;
 
     // ── Safety gate ───────────────────────────────────────────────────────────
     private boolean confirmed = false;
@@ -93,15 +107,39 @@ public class Mark2InitialTesting extends OpMode {
     private boolean prevLB2, prevRB2;
     private boolean prevStartGp1 = false;
 
+    // ── Turret aim servos ─────────────────────────────────────────────────────
+    private Servo aimServoLeft;
+    private Servo aimServoRight;
+
+    private static final double AIM_CENTER_POS = 0.50;
+    private static final double AIM_DEADBAND = 0.05;
+
+    private double aimServoPos = AIM_CENTER_POS;
+
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void init() {
-        drivetrain = new Mark2Drivetrain(hardwareMap);        // no Pinpoint / IMU
-        intake     = new Mark2Intake(hardwareMap);
-        launcher   = new Mark2Launcher(hardwareMap, false);   // false = motors only, no servos
+        drivetrain = new Mark2Drivetrain(hardwareMap);       // no Pinpoint / IMU
+        intake = new Mark2Intake(hardwareMap);
+        launcher = new Mark2Launcher(hardwareMap, true);     // true = motors + servos
 
-        intakeServoPos = nanToZero(intake.getServoPosition());
-        // hoodServoPos / feederServoPos left at 0.0 — servos not installed
+        // Initialize intake servos to safe centered positions
+        intake.setServoPosition(SERVO_CENTER_POS);
+        intakeServoPos = SERVO_CENTER_POS;
+
+        // Initialize launcher servos to safe centered positions
+        launcher.setHoodPosition(SERVO_CENTER_POS);
+        launcher.setFeederPosition(SERVO_CENTER_POS);
+        hoodServoPos = SERVO_CENTER_POS;
+        feederServoPos = SERVO_CENTER_POS;
+
+        aimServoLeft = hardwareMap.get(Servo.class, AIM_SERVO_LEFT);
+        aimServoRight = hardwareMap.get(Servo.class, AIM_SERVO_RIGHT);
+
+        // Initialize turret aim servos to safe centered positions
+        aimServoLeft.setPosition(AIM_CENTER_POS);
+        aimServoRight.setPosition(AIM_CENTER_POS);
+        aimServoPos = AIM_CENTER_POS;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -111,17 +149,32 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addLine("");
 
         telemetry.addLine("Servo status after INIT:");
-        telemetry.addLine("  Hood servo (1 & 2)  — NOT installed");
-        telemetry.addLine("  Feeder servo        — NOT installed");
-        telemetry.addData("  Intake servo",
+
+        telemetry.addData("  Intake servos",
                 Double.isNaN(intake.getServoPosition())
                         ? "NOT commanded — physically untouched"
                         : String.format(Locale.US, "commanded to %.3f by constructor",
-                                intake.getServoPosition()));
+                        intake.getServoPosition()));
+
+        telemetry.addData("  Turret aim servos",
+                String.format(Locale.US, "commanded to %.3f", aimServoPos));
+
+        telemetry.addData("  Hood servo",
+                Double.isNaN(launcher.getHoodPosition())
+                        ? "NOT commanded"
+                        : String.format(Locale.US, "currently %.3f", launcher.getHoodPosition()));
+
+        telemetry.addData("  Gate servos",
+                Double.isNaN(launcher.getFeederPosition())
+                        ? "NOT commanded"
+                        : String.format(Locale.US, "currently %.3f", launcher.getFeederPosition()));
 
         telemetry.addLine("");
         telemetry.addLine("Inspect checklist:");
-        telemetry.addLine("  [ ] Intake servo is within its mechanical range");
+        telemetry.addLine("  [ ] Intake servos are within their mechanical range");
+        telemetry.addLine("  [ ] Turret servos are centered and not binding");
+        telemetry.addLine("  [ ] Hood servo is within its mechanical range");
+        telemetry.addLine("  [ ] Gate servos are within their mechanical range");
         telemetry.addLine("  [ ] No linkage is bound or under unexpected stress");
         telemetry.addLine("  [ ] Motors can spin freely");
         telemetry.addLine("");
@@ -162,21 +215,28 @@ public class Mark2InitialTesting extends OpMode {
         drivetrain.driveSafe(gamepad1);
 
         // ── Intake motors ─────────────────────────────────────────────────────
-        if      (gamepad2.y) intake.PickUp();
-        else if (gamepad2.a) intake.Reverse();
-        else                 intake.Stop();
+        if (gamepad2.y) {
+            intake.PickUp();
+        } else if (gamepad2.a) {
+            intake.Reverse();
+        } else {
+            intake.Stop();
+        }
 
         // ── Intake servo nudge (LB / RB) ─────────────────────────────────────
         boolean lb2 = gamepad2.left_bumper;
         boolean rb2 = gamepad2.right_bumper;
+
         if (lb2 && !prevLB2) {
             intakeServoPos = clamp(intakeServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
             intake.setServoPosition(intakeServoPos);
         }
+
         if (rb2 && !prevRB2) {
             intakeServoPos = clamp(intakeServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
             intake.setServoPosition(intakeServoPos);
         }
+
         prevLB2 = lb2;
         prevRB2 = rb2;
 
@@ -190,53 +250,78 @@ public class Mark2InitialTesting extends OpMode {
         // ── Launcher state machine ────────────────────────────────────────────
         launcher.update(dt);
 
-        // ── Launcher servo nudge — DISABLED (servos not installed) ───────────
-        // Uncomment once hood and feeder servos are physically installed AND
-        // Mark2Launcher constructor is changed to hasServos = true.
-        /*
-        boolean dpadUp   = gamepad2.dpad_up;
+        // ── Launcher servo nudge ──────────────────────────────────────────────
+        // Hood servo uses Dpad Up / Down.
+        // Gate servos use Dpad Right / Left.
+        boolean dpadUp = gamepad2.dpad_up;
         boolean dpadDown = gamepad2.dpad_down;
+
         if (dpadUp && !prevDpadUp) {
             hoodServoPos = clamp(hoodServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
             launcher.setHoodPosition(hoodServoPos);
         }
+
         if (dpadDown && !prevDpadDown) {
             hoodServoPos = clamp(hoodServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
             launcher.setHoodPosition(hoodServoPos);
         }
+
         boolean dpadRight = gamepad2.dpad_right;
-        boolean dpadLeft  = gamepad2.dpad_left;
+        boolean dpadLeft = gamepad2.dpad_left;
+
         if (dpadRight && !prevDpadRight) {
             feederServoPos = clamp(feederServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
             launcher.setFeederPosition(feederServoPos);
         }
+
         if (dpadLeft && !prevDpadLeft) {
             feederServoPos = clamp(feederServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
             launcher.setFeederPosition(feederServoPos);
         }
-        prevDpadUp    = dpadUp;   prevDpadDown  = dpadDown;
-        prevDpadRight = dpadRight; prevDpadLeft  = dpadLeft;
-        */
+
+        prevDpadUp = dpadUp;
+        prevDpadDown = dpadDown;
+        prevDpadRight = dpadRight;
+        prevDpadLeft = dpadLeft;
+
+        // ── Turret aim servos — GP2 left stick X ─────────────────────────────
+        // gamepad2.left_stick_x is negative when pushed left, positive when right.
+        // This maps full-left stick to 0.0, center to 0.5, full-right to 1.0.
+        double aimInput = gamepad2.left_stick_x;
+
+        if (Math.abs(aimInput) < AIM_DEADBAND) {
+            aimInput = 0.0;
+        }
+
+        aimServoPos = clamp(AIM_CENTER_POS + (aimInput * 0.5), 0.0, 1.0);
+
+        aimServoLeft.setPosition(aimServoPos);
+        aimServoRight.setPosition(aimServoPos);
 
         // ── Telemetry ─────────────────────────────────────────────────────────
         Pose2D pose = drivetrain.getPose();
 
         telemetry.addLine("── Drivetrain ──────────────────");
-        telemetry.addData("  X (in)",      "%.2f", pose.getX(DistanceUnit.INCH));
-        telemetry.addData("  Y (in)",      "%.2f", pose.getY(DistanceUnit.INCH));
+        telemetry.addData("  X (in)", "%.2f", pose.getX(DistanceUnit.INCH));
+        telemetry.addData("  Y (in)", "%.2f", pose.getY(DistanceUnit.INCH));
         telemetry.addData("  Heading (°)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
 
-        telemetry.addLine("── Launcher (motors only) ──────");
-        telemetry.addData("  State",          launcher.getState().name());
-        telemetry.addData("  Motor power cmd","%.2f",
+        telemetry.addLine("── Launcher ────────────────────");
+        telemetry.addData("  State", launcher.getState().name());
+        telemetry.addData("  Motor power cmd", "%.2f",
                 gamepad2.right_trigger > 0.5 ? LAUNCHER_TEST_POWER : 0.0);
-        telemetry.addData("  Measured RPM",   "%.0f", launcher.getMeasuredRpm());
-        telemetry.addLine("  Hood / feeder servos — NOT installed");
+        telemetry.addData("  Measured RPM", "%.0f", launcher.getMeasuredRpm());
+        telemetry.addData("  Hood servo pos", "%.3f", hoodServoPos);
+        telemetry.addData("  Gate servo pos", "%.3f", feederServoPos);
 
         telemetry.addLine("── Intake ──────────────────────");
         telemetry.addData("  Intake servo pos", "%.3f", intakeServoPos);
         telemetry.addData("  Motor running",
                 gamepad2.y ? "FORWARD" : (gamepad2.a ? "REVERSE" : "stopped"));
+
+        telemetry.addLine("── Turret Aim ──────────────────");
+        telemetry.addData("  GP2 left stick X", "%.2f", gamepad2.left_stick_x);
+        telemetry.addData("  Aim servo pos", "%.3f", aimServoPos);
 
         telemetry.update();
     }
@@ -244,10 +329,6 @@ public class Mark2InitialTesting extends OpMode {
     // ─────────────────────────────────────────────────────────────────────────
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
-    }
-
-    private static double nanToZero(double value) {
-        return Double.isNaN(value) ? 0.0 : value;
     }
 }
 

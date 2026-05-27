@@ -1,5 +1,8 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
+
+import androidx.annotation.Nullable;
+
 /**
  * Centralized hardware-map configuration names for all Mark2 subsystems.
  *
@@ -34,19 +37,27 @@ public final class Mark2HardwareMapNames {
     public static final String PINPOINT          = "pinpoint";
 
     // ── Intake ────────────────────────────────────────────────────────────────
-    public static final String INTAKE_MOTOR_ONE  = "IntakeMotorOne";
-    public static final String INTAKE_MOTOR_TWO  = "IntakeMotorTwo";
-    public static final String INTAKE_SERVO      = "IntakeServo";
+    public static final String INTAKE_MOTOR_ONE  = "IntakeMotorOne"; // Expansion Hub
+    public static final String INTAKE_MOTOR_TWO  = "IntakeMotorTwo"; // Expansion Hub
+    public static final String INTAKE_SERVO_LEFT      = "IntakeServoLeft"; //Control Hub Servo Port 0
+    public static final String INTAKE_SERVO_RIGHT = "IntakeServoRight"; //Expansion Hub Servo Port 5
 
     // ── Launcher ──────────────────────────────────────────────────────────────
-    public static final String LAUNCHER_MOTOR_ONE  = "LauncherMotorOne";
-    public static final String LAUNCHER_MOTOR_TWO  = "LauncherMotorTwo";
+    public static final String LAUNCHER_MOTOR_ONE  = "LauncherMotorOne"; // Right Motor, Control Hub Port 2
+    public static final String LAUNCHER_MOTOR_TWO  = "LauncherMotorTwo"; // Left Motor, Control Hub Port 3
+
     /** Hood angle servo #1 (ServoOne). */
-    public static final String LAUNCHER_SERVO_ONE   = "LauncherServoOne";
-    /** Hood angle servo #2 (ServoTwo) — wired in reverse in firmware. */
-    public static final String LAUNCHER_SERVO_TWO   = "LauncherServoTwo";
-    /** Feeder / ball-push servo (ServoThree). */
-    public static final String LAUNCHER_SERVO_THREE = "LauncherServoThree";
+    public static final String HOOD_SERVO   = "HoodServo"; // Control Hub Servo Port 5
+
+    /** Feeder / ball-push servo Left (ServoTwo) — wired in reverse in firmware. */
+    public static final String GATE_SERVO_LEFT   = "GateServoLeft"; //Control Hub Servo Port 3
+
+    /** Feeder / ball-push servo Right (ServoThree). */
+    public static final String GATE_SERVO_RIGHT = "GateServoRight"; //Control Hub Servo Port 4
+
+    /** Servos used to rotate the turret */
+    public static final String AIM_SERVO_LEFT = "AimServoLeft"; //Control Hub Servo Port 1
+    public static final String AIM_SERVO_RIGHT = "AimServoRight";  //Control Hub Servo Port 2
 }
 
 

@@ -314,6 +314,3 @@ public class Flywheel {
         return Math.max(lo, Math.min(hi, v));
     }
 }
-
-
-
