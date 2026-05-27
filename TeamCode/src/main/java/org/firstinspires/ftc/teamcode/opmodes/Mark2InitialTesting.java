@@ -36,11 +36,14 @@ import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.*;
  * ── CONTROL MAP ──────────────────────────────────────────────────────────────
  *
  *  Gamepad 1  (Drivetrain — capped at safe power inside Mark2Drivetrain)
- *  ┌─────────────────────────────────────────────────────┐
- *  │  Left  stick Y / X  →  translate (forward / strafe) │
- *  │  Right stick X      →  rotate                       │
- *  │  START              →  confirm safety during INIT   │
- *  └─────────────────────────────────────────────────────┘
+ *  ┌──────────────────────────────────────────────────────────────┐
+ *  │  Right stick Y / X  →  translate (forward / strafe)         │
+ *  │  Left  stick X      →  rotate                               │
+ *  │  Left  trigger hold →  snail mode (60 % power cap)          │
+ *  │  Right bumper       →  toggle alliance-flip (reverses fwd   │
+ *  │                         + strafe for opposite-side driving) │
+ *  │  START              →  confirm safety during INIT           │
+ *  └──────────────────────────────────────────────────────────────┘
  *
  *  Gamepad 2  (Intake + Launcher + Turret Aim)
  *  ┌─────────────────────────────────────────────────────────────────────────┐
@@ -106,6 +109,7 @@ public class Mark2InitialTesting extends OpMode {
     private boolean prevDpadUp, prevDpadDown, prevDpadLeft, prevDpadRight;
     private boolean prevLB2, prevRB2;
     private boolean prevStartGp1 = false;
+    private boolean prevRB1      = false;   // GP1 right bumper — alliance flip toggle
 
     // ── Turret aim servos ─────────────────────────────────────────────────────
     private Servo aimServoLeft;
@@ -212,6 +216,11 @@ public class Mark2InitialTesting extends OpMode {
         lastNs = now;
 
         // ── Drivetrain ────────────────────────────────────────────────────────
+        // GP1 RB (rising edge) — toggle alliance-flip (reverses forward + strafe)
+        boolean rb1 = gamepad1.right_bumper;
+        if (rb1 && !prevRB1) drivetrain.toggleAllianceFlip();
+        prevRB1 = rb1;
+
         drivetrain.driveSafe(gamepad1);
 
         // ── Intake motors ─────────────────────────────────────────────────────
@@ -305,6 +314,8 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addData("  X (in)", "%.2f", pose.getX(DistanceUnit.INCH));
         telemetry.addData("  Y (in)", "%.2f", pose.getY(DistanceUnit.INCH));
         telemetry.addData("  Heading (°)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
+        telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped() ? "FLIPPED (GP1 RB to restore)" : "normal  (GP1 RB to flip)");
+        telemetry.addData("  Snail mode",    gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
 
         telemetry.addLine("── Launcher ────────────────────");
         telemetry.addData("  State", launcher.getState().name());
