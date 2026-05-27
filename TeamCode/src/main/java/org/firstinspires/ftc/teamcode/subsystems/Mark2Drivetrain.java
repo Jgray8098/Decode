@@ -291,7 +291,7 @@ public class Mark2Drivetrain {
         double flip    = allianceFlipped ? -1.0 : 1.0;
         double forward = flip * applyExpo(applyDeadzone(-gamepad.right_stick_y, deadzone), expoTranslate);
         double right   = flip * applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoTranslate);
-        double rotate  = applyExpo(applyDeadzone( gamepad.left_stick_x,  deadzone), expoRotate);
+        double rotate  = applyExpo(applyDeadzone(-gamepad.left_stick_x,  deadzone), expoRotate);
 
         double fl = forward + right + rotate;
         double fr = forward - right - rotate;
