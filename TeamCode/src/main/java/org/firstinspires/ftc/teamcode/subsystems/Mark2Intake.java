@@ -90,6 +90,18 @@ public class Mark2Intake {
     }
 
     /**
+     * Reverse intake with arm raised.  Moves the servo to the stowed (up)
+     * position and runs both motors in reverse at full power.  Use for
+     * clearing jams or ejecting a held ball.  Call {@link #HoldPosition()}
+     * when released to return the arm to the ready position.
+     */
+    public void ReverseArm() {
+        intakeMotorOne.setPower(-INTAKE_POWER);
+        intakeMotorTwo.setPower(-INTAKE_POWER);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
+    }
+
+    /**
      * Directly command the intake servo to a specific position.
      * Use this from a testing OpMode to find the correct values for
      * {@code INTAKE_SERVO_INTAKE_POSITION}, {@code INTAKE_SERVO_HOLD_POSITION},

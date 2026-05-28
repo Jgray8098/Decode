@@ -27,12 +27,14 @@ import java.util.Locale;
  *  ┌─────────────────────────────────────────────────────────────────────────┐
  *  │  INTAKE                                                                 │
  *  │    Y  (hold)        →  intake forward (motor 1 full, motor 2 × 1/3)    │
- *  │    (release Y)      →  motors stop, servo moves to hold position        │
+ *  │    X  (hold)        →  intake reverse, arm raised to stowed position    │
+ *  │    (release Y/X)    →  motors stop, servo moves to hold position        │
  *  │                                                                         │
  *  │  LAUNCHER                                                               │
  *  │    Dpad Up          →  select CLOSE shot distance preset                │
  *  │    Dpad Down        →  select FAR shot distance preset                  │
- *  │    B  (press)       →  fire at selected distance                        │
+ *  │    B  (hold)        →  spin up and fire; stops when released            │
+ *  │    A  (press)       →  cut launcher power immediately                   │
  *  │                                                                         │
  *  │  FEEDER (manual, only when launcher is IDLE)                            │
  *  │    Left stick X     →  feeder servo position                            │
@@ -52,8 +54,8 @@ public class Mark2TeleOp extends OpMode {
     // ── Launcher distance presets (inches) ────────────────────────────────────
     /** Dpad Up preset — close shot. */
     private static final double CLOSE_SHOT_DISTANCE = 60.0;    // TUNE
-    /** Dpad Down preset — far / long shot. */
-    private static final double FAR_SHOT_DISTANCE   = 120.0;   // TUNE
+    /** Dpad Down preset — far / long shot.  Reduced from 120 to limit max power. */
+    private static final double FAR_SHOT_DISTANCE   = 72.0;    // TUNE
 
     // ── Feeder servo manual-control limits ────────────────────────────────────
     /** Minimum (left-stop) position for manual feeder servo control. */
@@ -79,7 +81,6 @@ public class Mark2TeleOp extends OpMode {
     private boolean prevRB1      = false;
     private boolean prevDpadUp   = false;
     private boolean prevDpadDown = false;
-    private boolean prevB2       = false;
 
     // ═════════════════════════════════════════════════════════════════════════
     @Override
@@ -118,6 +119,9 @@ public class Mark2TeleOp extends OpMode {
         if (gamepad2.y) {
             // Motor 1 at full INTAKE_POWER, motor 2 at 1/3 power, servo to intake position
             intake.PickUpDifferential();
+        } else if (gamepad2.x) {
+            // Reverse with arm raised — eject / unjam; arm returns to hold when released
+            intake.ReverseArm();
         } else {
             // Servo moves to hold position; motors stop
             intake.HoldPosition();
@@ -133,12 +137,21 @@ public class Mark2TeleOp extends OpMode {
         prevDpadUp   = dpadUp;
         prevDpadDown = dpadDown;
 
-        // ── GP2 Launcher — fire (B press) ────────────────────────────────────
-        boolean b2 = gamepad2.b;
-        if (b2 && !prevB2) {
-            launcher.shoot(selectedDistance);
+        // ── GP2 Launcher — fire while B held; A cuts power immediately ────────
+        if (gamepad2.a) {
+            // A — hard stop: cut motors and retract feeder regardless of state
+            launcher.stop();
+        } else if (gamepad2.b) {
+            // B held — start the sequence when idle; state machine runs autonomously
+            if (launcher.getState() == LauncherState.IDLE) {
+                launcher.shoot(selectedDistance);
+            }
+        } else {
+            // B released — stop launcher if it was running
+            if (launcher.getState() != LauncherState.IDLE) {
+                launcher.stop();
+            }
         }
-        prevB2 = b2;
 
         // ── GP2 Feeder servo (manual, only when launcher is IDLE) ─────────────
         if (launcher.getState() == LauncherState.IDLE) {
@@ -187,7 +200,8 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addLine("── Intake ──────────────────────────");
         telemetry.addData("  Servo pos",     String.format(Locale.US, "%.3f",
                 intake.getServoPosition()));
-        telemetry.addData("  Running",       gamepad2.y ? "FORWARD (differential)" : "stopped/hold");
+        telemetry.addData("  Running",       gamepad2.y ? "FORWARD (differential)"
+                : (gamepad2.x ? "REVERSE (arm up)" : "stopped/hold"));
 
         telemetry.update();
     }
