@@ -14,6 +14,8 @@ import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LA
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.HOOD_SERVO;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.GATE_SERVO_LEFT;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.GATE_SERVO_RIGHT;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.AIM_SERVO_LEFT;
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.AIM_SERVO_RIGHT;
 
 
 /**
@@ -52,11 +54,18 @@ public class Mark2Launcher {
     // Servo positions  (tune!)
     // -------------------------------------------------------------------------
     /** Hood servo resting position when launcher is idle. */
-    private static final double HOOD_SERVO_RESET_POSITION  = 0.0;
+    public static final double HOOD_SERVO_RESET_POSITION  = 0.0;
     /** Gate servos "push" position — feeds ball into launch mechanism. */
-    private static final double FEEDER_SERVO_FEED_POSITION = 0.24;
-    /** Gate servos retracted / resting position. */
-    private static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+    public static final double FEEDER_SERVO_FEED_POSITION = 0.24;
+    /** Gate servos retracted / resting position — default when not firing. */
+    public static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+
+    /**
+     * How long the feeder gate servos stay at {@link #FEEDER_SERVO_FEED_POSITION}
+     * before the state machine advances to DONE and retracts them.
+     * Increase if the servo hasn't completed its travel before resetting.  (tune!)
+     */
+    public static final double FEEDING_DWELL_MS = 300.0;   // TUNE
 
 
     /** Encoder ticks per output-shaft revolution for your GoBilda motor model. */
@@ -95,8 +104,14 @@ public class Mark2Launcher {
     private Servo hoodPositionServo;
     private Servo gateServoLeft;
     private Servo gateServoRight;
+    /** Aim (turret) servos — pan the launcher left/right. */
+    private Servo aimServoLeft;
+    private Servo aimServoRight;
 
-    /** True when all three servos were successfully initialised. False = motors only. */
+    /** Tracks the last commanded aim position for telemetry. */
+    private double aimServoPos = 0.5;
+
+    /** True when all servos were successfully initialised. False = motors only. */
     private final boolean hasServos;
 
     // -------------------------------------------------------------------------
@@ -115,6 +130,9 @@ public class Mark2Launcher {
     private double targetPower  = 0.0;
     private double targetRpm    = 0.0;
     private double measuredRpm  = 0.0;
+
+    /** Accumulates time (ms) spent in the FEEDING state for the dwell timer. */
+    private double feedingElapsedMs = 0.0;
 
     // Fallback tick-based velocity
     private int lastPosOne = 0;
@@ -150,13 +168,15 @@ public class Mark2Launcher {
             hoodPositionServo = hardwareMap.servo.get(HOOD_SERVO);
             gateServoLeft     = hardwareMap.servo.get(GATE_SERVO_LEFT);
             gateServoRight    = hardwareMap.servo.get(GATE_SERVO_RIGHT);
+            aimServoLeft      = hardwareMap.servo.get(AIM_SERVO_LEFT);
+            aimServoRight     = hardwareMap.servo.get(AIM_SERVO_RIGHT);
 
             // Servos are intentionally NOT commanded here.
             // No servo position is assumed safe until the driver confirms safety
             // in Mark2InitialTesting.init_loop().
         }
 
-        launcherMotorOne.setDirection(DcMotorSimple.Direction.REVERSE);
+        launcherMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
 
         launcherMotorOne.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         launcherMotorTwo.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
@@ -214,13 +234,18 @@ public class Mark2Launcher {
 
                 if (measuredRpm >= targetRpm * RPM_READY_FRACTION) {
                     if (hasServos) setFeederPosition(FEEDER_SERVO_FEED_POSITION);
+                    feedingElapsedMs = 0.0;   // reset dwell timer
                     state = LauncherState.FEEDING;
                 }
                 break;
             }
 
             case FEEDING:
-                state = LauncherState.DONE;
+                // Hold feeder at FEED_POSITION for FEEDING_DWELL_MS before retracting.
+                feedingElapsedMs += dtSec * 1000.0;
+                if (feedingElapsedMs >= FEEDING_DWELL_MS) {
+                    state = LauncherState.DONE;
+                }
                 break;
 
             case DONE:
@@ -263,6 +288,26 @@ public class Mark2Launcher {
         gateServoLeft.setPosition(position);
         gateServoRight.setPosition(position);
     }
+
+    /**
+     * Pan the launcher aim servos to the specified position.
+     * Both servos move to the same commanded value; if the physical linkage
+     * requires one to be mirrored, reverse that servo in the Robot Controller
+     * configuration rather than here.
+     *
+     * @param position Servo position [0.0 – 1.0].
+     *                 Typically constrained by the caller to a safe sub-range
+     *                 (e.g. 0.05 – 0.95) to avoid hitting mechanical stops.
+     */
+    public void setAimPosition(double position) {
+        if (!hasServos) return;
+        aimServoPos = position;
+        aimServoLeft.setPosition(position);
+        aimServoRight.setPosition(position);
+    }
+
+    /** Last commanded aim servo position. Returns 0.5 if servos not installed. */
+    public double getAimPosition() { return aimServoPos; }
 
     public LauncherState getState()        { return state; }
     public double getMeasuredRpm()  { return measuredRpm; }

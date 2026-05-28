@@ -15,50 +15,84 @@ public class Mark2Intake {
     private Servo intakeServoRight;
 
     // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
-    private static final double INTAKE_POWER                 = .99;
-    private static final double INTAKE_HOLD_ARTIFACT_POWER   = .15;
+    private static final double INTAKE_POWER               = .99;
+    private static final double INTAKE_HOLD_ARTIFACT_POWER = .15;
+    /**
+     * Motor two power as a fraction of {@link #INTAKE_POWER} when running in
+     * differential (TeleOp) mode.
+     */
+    private static final double INTAKE_MOTOR_TWO_FRACTION  = 1.0 / 3.0;
 
-    private static final double INTAKE_SERVO_INIT_POSITION = 0.5;
-    private static final double INTAKE_SERVO_INTAKE_POSITION = 0.58;
-    private static final double INTAKE_SERVO_STOWED_POSITION = 0.34;
-    private static final double INTAKE_SERVO_HOLD_POSITION   = 0.68;
+    /** Arm raised — default position when idle, stopped, or reversing. */
+    private static final double INTAKE_SERVO_STOWED_POSITION  = 0.34;
+    /** Arm lowered to sweep position — used only while intaking forward. */
+    private static final double INTAKE_SERVO_INTAKE_POSITION  = 0.58;
 
-    private double intakeServoPosition = INTAKE_SERVO_INIT_POSITION;
+    private double intakeServoPosition = INTAKE_SERVO_STOWED_POSITION;
 
     public Mark2Intake(HardwareMap hardwareMap){
         intakeMotorOne  = hardwareMap.dcMotor.get(INTAKE_MOTOR_ONE);
-        intakeMotorTwo = hardwareMap.dcMotor.get(INTAKE_MOTOR_TWO);
+        intakeMotorTwo  = hardwareMap.dcMotor.get(INTAKE_MOTOR_TWO);
 
-        intakeServoLeft = hardwareMap.servo.get(INTAKE_SERVO_LEFT);
+        intakeServoLeft  = hardwareMap.servo.get(INTAKE_SERVO_LEFT);
         intakeServoRight = hardwareMap.servo.get(INTAKE_SERVO_RIGHT);
 
         intakeMotorTwo.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        setServoPosition(INTAKE_SERVO_INIT_POSITION);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);   // arm up at start
     }
 
-    public void PickUp(){
+    public void PickUp() {
         intakeMotorOne.setPower(INTAKE_POWER);
         intakeMotorTwo.setPower(INTAKE_POWER);
-        setServoPosition(INTAKE_SERVO_INTAKE_POSITION);
+        setServoPosition(INTAKE_SERVO_INTAKE_POSITION);   // arm down to sweep
     }
 
-    public void Hold(){
-        intakeMotorOne.setPower(INTAKE_HOLD_ARTIFACT_POWER);
-        intakeMotorTwo.setPower(INTAKE_HOLD_ARTIFACT_POWER);
-        setServoPosition(INTAKE_SERVO_HOLD_POSITION);
+    /**
+     * TeleOp intake mode — motor one at full {@link #INTAKE_POWER},
+     * motor two at {@link #INTAKE_MOTOR_TWO_FRACTION} of that.
+     * Arm moves down to sweep position.
+     */
+    public void PickUpDifferential() {
+        intakeMotorOne.setPower(INTAKE_POWER);
+        intakeMotorTwo.setPower(INTAKE_POWER * INTAKE_MOTOR_TWO_FRACTION);
+        setServoPosition(INTAKE_SERVO_INTAKE_POSITION);   // arm down to sweep
     }
 
-    public void Stop(){
+    /** Stop motors and raise arm to stowed position. */
+    public void HoldPosition() {
         intakeMotorOne.setPower(0);
         intakeMotorTwo.setPower(0);
-        //setServoPosition(INTAKE_SERVO_STOWED_POSITION);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
     }
 
-    /** Run intake motors in reverse — useful for unjamming or testing motor direction. */
+    public void Hold() {
+        intakeMotorOne.setPower(INTAKE_HOLD_ARTIFACT_POWER);
+        intakeMotorTwo.setPower(INTAKE_HOLD_ARTIFACT_POWER);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
+    }
+
+    public void Stop() {
+        intakeMotorOne.setPower(0);
+        intakeMotorTwo.setPower(0);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
+    }
+
+    /** Reverse motors with arm raised — for unjamming or ejecting. */
     public void Reverse() {
         intakeMotorOne.setPower(-INTAKE_POWER);
         intakeMotorTwo.setPower(-INTAKE_POWER);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
+    }
+
+    /**
+     * Reverse intake with arm raised (same as {@link #Reverse()} — kept for
+     * backward compatibility with TeleOp button mapping).
+     */
+    public void ReverseArm() {
+        intakeMotorOne.setPower(-INTAKE_POWER);
+        intakeMotorTwo.setPower(-INTAKE_POWER);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
     }
 
     /**

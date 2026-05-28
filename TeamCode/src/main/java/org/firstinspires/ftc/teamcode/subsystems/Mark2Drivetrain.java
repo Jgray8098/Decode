@@ -41,6 +41,13 @@ public class Mark2Drivetrain {
     private double expoTranslate = 0.5;  // Softens forward/strafe response
     private double expoRotate = 0.5;     // Softens turn response
 
+    /**
+     * When true, forward and strafe inputs are negated so a driver on the
+     * opposite side of the field experiences the same "push forward = away
+     * from me" behaviour.  Toggle with {@link #toggleAllianceFlip()}.
+     */
+    private boolean allianceFlipped = false;
+
     // -------------------------------------------------------------------------
     // driveToPosition / aim — PID gains  (tune with Constants.java as reference)
     // -------------------------------------------------------------------------
@@ -104,8 +111,9 @@ public class Mark2Drivetrain {
 //    public void driveTeleop(double forward, double right, double rotate) {
     public void driveTeleop(Gamepad driverController) {
         // Apply deadzone and expo shaping
-        double forward = applyExpo(applyDeadzone(driverController.left_stick_y, deadzone), expoTranslate);
-        double right   = applyExpo(applyDeadzone(driverController.left_stick_x, deadzone), expoTranslate);
+        double flip    = allianceFlipped ? -1.0 : 1.0;
+        double forward = flip * applyExpo(applyDeadzone(driverController.left_stick_y, deadzone), expoTranslate);
+        double right   = flip * applyExpo(applyDeadzone(driverController.left_stick_x, deadzone), expoTranslate);
         double rotate  = applyExpo(applyDeadzone(driverController.right_stick_x, deadzone), expoRotate);
 
         // Mecanum power calculation
@@ -263,33 +271,55 @@ public class Mark2Drivetrain {
     }
 
     /** Maximum power fraction applied during safe / test driving. */
-    private static final double SAFE_DRIVE_POWER_CAP = 0.99;
+    private static final double SAFE_DRIVE_POWER_CAP  = 0.99;
+    /** Power cap applied when the left trigger is held — snail mode for precise manoeuvring. */
+    public  static final double SNAIL_MODE_POWER_CAP  = 0.60;
 
     /**
      * Drive the robot with full expo/deadzone shaping but capped at
      * {@value #SAFE_DRIVE_POWER_CAP} total power on any wheel.
      * Use this during initial testing to reduce the risk of impact.
      *
-     * <p>Control mapping mirrors {@link #driveTeleop(Gamepad)}:
-     * left stick = translate, right stick X = rotate.</p>
+     * <p>Holding the <b>left trigger</b> (any value &gt; 0) engages snail mode,
+     * further capping power to {@value #SNAIL_MODE_POWER_CAP} for finer control.</p>
+     *
+     * <p>Control mapping (testing layout):
+     * right stick = translate (Y = forward, X = strafe), left stick X = rotate,
+     * left trigger = snail mode.</p>
      */
     public void driveSafe(Gamepad gamepad) {
-        double forward = applyExpo(applyDeadzone(-gamepad.left_stick_y, deadzone), expoTranslate);
-        double right   = applyExpo(applyDeadzone( gamepad.left_stick_x, deadzone), expoTranslate);
-        double rotate  = applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoRotate);
+        double flip    = allianceFlipped ? -1.0 : 1.0;
+        double forward = flip * applyExpo(applyDeadzone(-gamepad.right_stick_y, deadzone), expoTranslate);
+        double right   = flip * applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoTranslate);
+        double rotate  = applyExpo(applyDeadzone(-gamepad.left_stick_x,  deadzone), expoRotate);
 
         double fl = forward + right + rotate;
         double fr = forward - right - rotate;
         double bl = forward - right + rotate;
         double br = forward + right - rotate;
 
-        // Normalize to ≤ 1, then apply the safety cap
+        // Normalize to ≤ 1, then apply the appropriate power cap
+        double cap = (gamepad.left_trigger > 0) ? SNAIL_MODE_POWER_CAP : SAFE_DRIVE_POWER_CAP;
         double max = Math.max(1.0, Math.max(Math.max(Math.abs(fl), Math.abs(fr)),
                                             Math.max(Math.abs(bl), Math.abs(br))));
-        frontLeftMotor.setPower(fl  / max * SAFE_DRIVE_POWER_CAP);
-        frontRightMotor.setPower(fr / max * SAFE_DRIVE_POWER_CAP);
-        backLeftMotor.setPower(bl   / max * SAFE_DRIVE_POWER_CAP);
-        backRightMotor.setPower(br  / max * SAFE_DRIVE_POWER_CAP);
+        frontLeftMotor.setPower(fl  / max * cap);
+        frontRightMotor.setPower(fr / max * cap);
+        backLeftMotor.setPower(bl   / max * cap);
+        backRightMotor.setPower(br  / max * cap);
+    }
+
+    /**
+     * Toggle the alliance-flip state.  When flipped, forward and strafe inputs
+     * are negated so a driver seated on the opposite side of the field experiences
+     * the same "push forward = away from me" behaviour.  Rotation is unaffected.
+     */
+    public void toggleAllianceFlip() {
+        allianceFlipped = !allianceFlipped;
+    }
+
+    /** @return {@code true} if the drive controls are currently flipped for the opposite alliance. */
+    public boolean isAllianceFlipped() {
+        return allianceFlipped;
     }
 
     /**
