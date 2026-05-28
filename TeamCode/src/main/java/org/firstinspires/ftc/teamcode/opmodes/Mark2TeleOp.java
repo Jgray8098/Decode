@@ -37,9 +37,9 @@ import java.util.Locale;
  *  │    A  (press)       →  cut launcher power immediately                   │
  *  │                                                                         │
  *  │  FEEDER (manual, only when launcher is IDLE)                            │
- *  │    Left stick X     →  feeder servo position                            │
- *  │                         full left  = FEEDER_MIN_POS (0.05)             │
- *  │                         full right = FEEDER_MAX_POS (0.95)             │
+ *  │    Left stick X     →  aim servo position                              │
+ *  │                         full left  = AIM_MIN_POS (0.05)               │
+ *  │                         full right = AIM_MAX_POS (0.95)               │
  *  └─────────────────────────────────────────────────────────────────────────┘
  *
  * ── TODO ──────────────────────────────────────────────────────────────────────
@@ -57,13 +57,13 @@ public class Mark2TeleOp extends OpMode {
     /** Dpad Down preset — far / long shot.  Reduced from 120 to limit max power. */
     private static final double FAR_SHOT_DISTANCE   = 72.0;    // TUNE
 
-    // ── Feeder servo manual-control limits ────────────────────────────────────
-    /** Minimum (left-stop) position for manual feeder servo control. */
-    private static final double FEEDER_MIN_POS = 0.05;
-    /** Maximum (right-stop) position for manual feeder servo control. */
-    private static final double FEEDER_MAX_POS = 0.95;
-    /** Stick deadzone applied to the feeder control axis on GP2. */
-    private static final double FEEDER_STICK_DEADZONE = 0.05;
+    // ── Aim servo manual-control limits ──────────────────────────────────────
+    /** Minimum (leftmost) position for manual aim servo control. */
+    private static final double AIM_MIN_POS = 0.05;
+    /** Maximum (rightmost) position for manual aim servo control. */
+    private static final double AIM_MAX_POS = 0.95;
+    /** Stick deadzone applied to the aim control axis on GP2. */
+    private static final double AIM_STICK_DEADZONE = 0.05;
 
     // ── Subsystems ────────────────────────────────────────────────────────────
     private Mark2Drivetrain drivetrain;
@@ -153,16 +153,14 @@ public class Mark2TeleOp extends OpMode {
             }
         }
 
-        // ── GP2 Feeder servo (manual, only when launcher is IDLE) ─────────────
-        if (launcher.getState() == LauncherState.IDLE) {
-            double stickX = gamepad2.left_stick_x;
-            if (Math.abs(stickX) > FEEDER_STICK_DEADZONE) {
-                // Map [-1, +1]  →  [FEEDER_MIN_POS, FEEDER_MAX_POS]
-                double feederPos = (stickX + 1.0) / 2.0
-                        * (FEEDER_MAX_POS - FEEDER_MIN_POS)
-                        + FEEDER_MIN_POS;
-                launcher.setFeederPosition(feederPos);
-            }
+        // ── GP2 Aim servo (left stick X — always active) ──────────────────────
+        double aimStick = gamepad2.left_stick_x;
+        if (Math.abs(aimStick) > AIM_STICK_DEADZONE) {
+            // Map [-1, +1]  →  [AIM_MIN_POS, AIM_MAX_POS]
+            double aimPos = (aimStick + 1.0) / 2.0
+                    * (AIM_MAX_POS - AIM_MIN_POS)
+                    + AIM_MIN_POS;
+            launcher.setAimPosition(aimPos);
         }
 
         // ── Launcher state machine ────────────────────────────────────────────
@@ -192,6 +190,7 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("  Target RPM",    String.format(Locale.US, "%.0f", launcher.getTargetRpm()));
         telemetry.addData("  Measured RPM",  String.format(Locale.US, "%.0f", launcher.getMeasuredRpm()));
         telemetry.addData("  At speed",      launcher.isAtSpeed() ? "YES" : "no");
+        telemetry.addData("  Aim pos",       String.format(Locale.US, "%.3f", launcher.getAimPosition()));
         telemetry.addData("  Hood pos",      String.format(Locale.US, "%.3f",
                 nanToZero(launcher.getHoodPosition())));
         telemetry.addData("  Feeder pos",    String.format(Locale.US, "%.3f",

@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -90,12 +89,17 @@ public class Mark2InitialTesting extends OpMode {
     private static final double LAUNCHER_TEST_POWER = 0.60;
     /** How much a single bumper or dpad press shifts a servo position. */
     private static final double SERVO_NUDGE_STEP = 0.02;
-
     /** Safe centered position used during initial bring-up. */
     private static final double SERVO_CENTER_POS = 0.50;
+    /** Deadzone for the GP2 left stick aim axis. */
+    private static final double AIM_DEADBAND   = 0.05;
+    /** Minimum aim servo position (left stop). */
+    private static final double AIM_MIN_POS    = 0.05;
+    /** Maximum aim servo position (right stop). */
+    private static final double AIM_MAX_POS    = 0.95;
 
     // ── Servo position tracking ───────────────────────────────────────────────
-    private double hoodServoPos = SERVO_CENTER_POS;
+    private double hoodServoPos   = SERVO_CENTER_POS;
     private double feederServoPos = SERVO_CENTER_POS;
     private double intakeServoPos = SERVO_CENTER_POS;
 
@@ -111,14 +115,6 @@ public class Mark2InitialTesting extends OpMode {
     private boolean prevStartGp1 = false;
     private boolean prevRB1      = false;   // GP1 right bumper — alliance flip toggle
 
-    // ── Turret aim servos ─────────────────────────────────────────────────────
-    private Servo aimServoLeft;
-    private Servo aimServoRight;
-
-    private static final double AIM_CENTER_POS = 0.50;
-    private static final double AIM_DEADBAND = 0.05;
-
-    private double aimServoPos = AIM_CENTER_POS;
 
     // ─────────────────────────────────────────────────────────────────────────
     @Override
@@ -134,16 +130,9 @@ public class Mark2InitialTesting extends OpMode {
         // Initialize launcher servos to safe centered positions
         launcher.setHoodPosition(SERVO_CENTER_POS);
         launcher.setFeederPosition(SERVO_CENTER_POS);
-        hoodServoPos = SERVO_CENTER_POS;
+        launcher.setAimPosition(SERVO_CENTER_POS);   // turret centred via launcher API
+        hoodServoPos   = SERVO_CENTER_POS;
         feederServoPos = SERVO_CENTER_POS;
-
-        aimServoLeft = hardwareMap.get(Servo.class, AIM_SERVO_LEFT);
-        aimServoRight = hardwareMap.get(Servo.class, AIM_SERVO_RIGHT);
-
-        // Initialize turret aim servos to safe centered positions
-        aimServoLeft.setPosition(AIM_CENTER_POS);
-        aimServoRight.setPosition(AIM_CENTER_POS);
-        aimServoPos = AIM_CENTER_POS;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -161,7 +150,7 @@ public class Mark2InitialTesting extends OpMode {
                         intake.getServoPosition()));
 
         telemetry.addData("  Turret aim servos",
-                String.format(Locale.US, "commanded to %.3f", aimServoPos));
+                String.format(Locale.US, "commanded to %.3f", launcher.getAimPosition()));
 
         telemetry.addData("  Hood servo",
                 Double.isNaN(launcher.getHoodPosition())
@@ -293,19 +282,15 @@ public class Mark2InitialTesting extends OpMode {
         prevDpadRight = dpadRight;
         prevDpadLeft = dpadLeft;
 
-        // ── Turret aim servos — GP2 left stick X ─────────────────────────────
-        // gamepad2.left_stick_x is negative when pushed left, positive when right.
-        // This maps full-left stick to 0.0, center to 0.5, full-right to 1.0.
+        // ── Turret aim — GP2 left stick X → launcher.setAimPosition() ────────
+        // Maps [-1, +1] → [AIM_MIN_POS, AIM_MAX_POS], consistent with TeleOp.
         double aimInput = gamepad2.left_stick_x;
-
-        if (Math.abs(aimInput) < AIM_DEADBAND) {
-            aimInput = 0.0;
+        if (Math.abs(aimInput) > AIM_DEADBAND) {
+            double aimPos = (aimInput + 1.0) / 2.0
+                    * (AIM_MAX_POS - AIM_MIN_POS)
+                    + AIM_MIN_POS;
+            launcher.setAimPosition(aimPos);
         }
-
-        aimServoPos = clamp(AIM_CENTER_POS + (aimInput * 0.5), 0.0, 1.0);
-
-        aimServoLeft.setPosition(aimServoPos);
-        aimServoRight.setPosition(aimServoPos);
 
         // ── Telemetry ─────────────────────────────────────────────────────────
         Pose2D pose = drivetrain.getPose();
@@ -332,7 +317,7 @@ public class Mark2InitialTesting extends OpMode {
 
         telemetry.addLine("── Turret Aim ──────────────────");
         telemetry.addData("  GP2 left stick X", "%.2f", gamepad2.left_stick_x);
-        telemetry.addData("  Aim servo pos", "%.3f", aimServoPos);
+        telemetry.addData("  Aim servo pos",    "%.3f", launcher.getAimPosition());
 
         telemetry.update();
     }
