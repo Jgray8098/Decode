@@ -54,11 +54,18 @@ public class Mark2Launcher {
     // Servo positions  (tune!)
     // -------------------------------------------------------------------------
     /** Hood servo resting position when launcher is idle. */
-    private static final double HOOD_SERVO_RESET_POSITION  = 0.0;
+    public static final double HOOD_SERVO_RESET_POSITION  = 0.0;
     /** Gate servos "push" position — feeds ball into launch mechanism. */
-    private static final double FEEDER_SERVO_FEED_POSITION = 0.24;
-    /** Gate servos retracted / resting position. */
-    private static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+    public static final double FEEDER_SERVO_FEED_POSITION = 0.24;
+    /** Gate servos retracted / resting position — default when not firing. */
+    public static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+
+    /**
+     * How long the feeder gate servos stay at {@link #FEEDER_SERVO_FEED_POSITION}
+     * before the state machine advances to DONE and retracts them.
+     * Increase if the servo hasn't completed its travel before resetting.  (tune!)
+     */
+    public static final double FEEDING_DWELL_MS = 300.0;   // TUNE
 
 
     /** Encoder ticks per output-shaft revolution for your GoBilda motor model. */
@@ -123,6 +130,9 @@ public class Mark2Launcher {
     private double targetPower  = 0.0;
     private double targetRpm    = 0.0;
     private double measuredRpm  = 0.0;
+
+    /** Accumulates time (ms) spent in the FEEDING state for the dwell timer. */
+    private double feedingElapsedMs = 0.0;
 
     // Fallback tick-based velocity
     private int lastPosOne = 0;
@@ -224,13 +234,18 @@ public class Mark2Launcher {
 
                 if (measuredRpm >= targetRpm * RPM_READY_FRACTION) {
                     if (hasServos) setFeederPosition(FEEDER_SERVO_FEED_POSITION);
+                    feedingElapsedMs = 0.0;   // reset dwell timer
                     state = LauncherState.FEEDING;
                 }
                 break;
             }
 
             case FEEDING:
-                state = LauncherState.DONE;
+                // Hold feeder at FEED_POSITION for FEEDING_DWELL_MS before retracting.
+                feedingElapsedMs += dtSec * 1000.0;
+                if (feedingElapsedMs >= FEEDING_DWELL_MS) {
+                    state = LauncherState.DONE;
+                }
                 break;
 
             case DONE:

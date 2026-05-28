@@ -89,6 +89,9 @@ public class Mark2TeleOp extends OpMode {
         intake     = new Mark2Intake(hardwareMap);
         launcher   = new Mark2Launcher(hardwareMap);     // full hardware (all servos)
 
+        // Ensure feeder starts retracted at idle position
+        launcher.resetFeeder();
+
         lastNs = System.nanoTime();
 
         telemetry.addLine("Mark2 TeleOp — Initialized");

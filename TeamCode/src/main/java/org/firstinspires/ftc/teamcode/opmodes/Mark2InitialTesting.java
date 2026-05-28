@@ -133,6 +133,8 @@ public class Mark2InitialTesting extends OpMode {
         launcher.setAimPosition(SERVO_CENTER_POS);   // turret centred via launcher API
         hoodServoPos   = SERVO_CENTER_POS;
         feederServoPos = SERVO_CENTER_POS;
+        // Move feeder to its known idle (retracted) position ready for operation
+        launcher.resetFeeder();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
