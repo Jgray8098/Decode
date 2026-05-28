@@ -6,13 +6,12 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.teamcode.control.Mark2ManualLauncherController;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 
 import java.util.Locale;
-
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.*;
 
 /**
  * Mark2InitialTesting
@@ -54,7 +53,9 @@ import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.*;
  *  │    RB  press        →  intake servos position  + 0.02  (nudge up)       │
  *  │                                                                         │
  *  │  LAUNCHER MOTORS                                                        │
- *  │    Right trigger > 0.5  (hold)  →  spin motors at test power            │
+ *  │    X press                   →  select CLOSE zone (2000 RPM, hood 0.20) │
+ *  │    B press                   →  select FAR zone (2800 RPM, hood 0.70)   │
+ *  │    Right trigger > 0.5 hold  →  spin motors at selected zone RPM        │
  *  │    (trigger released)           →  motors stop                          │
  *  │                                                                         │
  *  │  LAUNCHER SERVOS                                                        │
@@ -67,17 +68,18 @@ import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.*;
  *  └─────────────────────────────────────────────────────────────────────────┘
  *
  * ── TUNING WORKFLOW ──────────────────────────────────────────────────────────
- *  1. Use right trigger to verify launcher motor direction at low power.
+ *  1. Use X/B to select close/far launcher presets, then hold right trigger.
  *  2. Use LB/RB to find intake servo positions.
  *  3. Use Dpad Up/Down to find hood servo positions.
  *  4. Use Dpad Left/Right to find gate servo positions.
  *  5. Use GP2 left stick X to verify turret aim servo travel.
  */
-@TeleOp(name = "Mark2InitialTesting", group = "Test")
+//@TeleOp(name = "Mark2InitialTesting", group = "Test")
 public class Mark2InitialTesting extends OpMode {
 
     // ── Subsystems ────────────────────────────────────────────────────────────
     private Mark2Launcher launcher;
+    private Mark2ManualLauncherController manualLauncher;
     private Mark2Intake intake;
     private Mark2Drivetrain drivetrain;
 
@@ -85,22 +87,11 @@ public class Mark2InitialTesting extends OpMode {
     // Pinpoint / IMU not currently installed — using no-arg drivetrain constructor.
 
     // ── Test constants ────────────────────────────────────────────────────────
-    /** Motor power used when the right trigger spins the launcher during testing. */
-    private static final double LAUNCHER_TEST_POWER = 0.60;
     /** How much a single bumper or dpad press shifts a servo position. */
     private static final double SERVO_NUDGE_STEP = 0.02;
     /** Safe centered position used during initial bring-up. */
     private static final double SERVO_CENTER_POS = 0.50;
-    /** Deadzone for the GP2 left stick aim axis. */
-    private static final double AIM_DEADBAND   = 0.05;
-    /** Minimum aim servo position (left stop). */
-    private static final double AIM_MIN_POS    = 0.05;
-    /** Maximum aim servo position (right stop). */
-    private static final double AIM_MAX_POS    = 0.95;
-
     // ── Servo position tracking ───────────────────────────────────────────────
-    private double hoodServoPos   = SERVO_CENTER_POS;
-    private double feederServoPos = SERVO_CENTER_POS;
     private double intakeServoPos = SERVO_CENTER_POS;
 
     // ── Safety gate ───────────────────────────────────────────────────────────
@@ -110,7 +101,6 @@ public class Mark2InitialTesting extends OpMode {
     private long lastNs = 0;
 
     // ── Button edge-detection ─────────────────────────────────────────────────
-    private boolean prevDpadUp, prevDpadDown, prevDpadLeft, prevDpadRight;
     private boolean prevLB2, prevRB2;
     private boolean prevStartGp1 = false;
     private boolean prevRB1      = false;   // GP1 right bumper — alliance flip toggle
@@ -122,19 +112,14 @@ public class Mark2InitialTesting extends OpMode {
         drivetrain = new Mark2Drivetrain(hardwareMap);       // no Pinpoint / IMU
         intake = new Mark2Intake(hardwareMap);
         launcher = new Mark2Launcher(hardwareMap, true);     // true = motors + servos
+        manualLauncher = new Mark2ManualLauncherController(launcher);
 
         // Initialize intake servos to safe centered positions
         intake.setServoPosition(SERVO_CENTER_POS);
         intakeServoPos = SERVO_CENTER_POS;
 
         // Initialize launcher servos to safe centered positions
-        launcher.setHoodPosition(SERVO_CENTER_POS);
-        launcher.setFeederPosition(SERVO_CENTER_POS);
-        launcher.setAimPosition(SERVO_CENTER_POS);   // turret centred via launcher API
-        hoodServoPos   = SERVO_CENTER_POS;
-        feederServoPos = SERVO_CENTER_POS;
-        // Move feeder to its known idle (retracted) position ready for operation
-        launcher.resetFeeder();
+        manualLauncher.centerServos();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -240,59 +225,8 @@ public class Mark2InitialTesting extends OpMode {
         prevLB2 = lb2;
         prevRB2 = rb2;
 
-        // ── Launcher motors (hold right trigger) ──────────────────────────────
-        if (gamepad2.right_trigger > 0.5) {
-            launcher.testSpinMotors(LAUNCHER_TEST_POWER);
-        } else {
-            launcher.testSpinMotors(0.0);
-        }
-
-        // ── Launcher state machine ────────────────────────────────────────────
-        launcher.update(dt);
-
-        // ── Launcher servo nudge ──────────────────────────────────────────────
-        // Hood servo uses Dpad Up / Down.
-        // Gate servos use Dpad Right / Left.
-        boolean dpadUp = gamepad2.dpad_up;
-        boolean dpadDown = gamepad2.dpad_down;
-
-        if (dpadUp && !prevDpadUp) {
-            hoodServoPos = clamp(hoodServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setHoodPosition(hoodServoPos);
-        }
-
-        if (dpadDown && !prevDpadDown) {
-            hoodServoPos = clamp(hoodServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setHoodPosition(hoodServoPos);
-        }
-
-        boolean dpadRight = gamepad2.dpad_right;
-        boolean dpadLeft = gamepad2.dpad_left;
-
-        if (dpadRight && !prevDpadRight) {
-            feederServoPos = clamp(feederServoPos + SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setFeederPosition(feederServoPos);
-        }
-
-        if (dpadLeft && !prevDpadLeft) {
-            feederServoPos = clamp(feederServoPos - SERVO_NUDGE_STEP, 0.0, 1.0);
-            launcher.setFeederPosition(feederServoPos);
-        }
-
-        prevDpadUp = dpadUp;
-        prevDpadDown = dpadDown;
-        prevDpadRight = dpadRight;
-        prevDpadLeft = dpadLeft;
-
-        // ── Turret aim — GP2 left stick X → launcher.setAimPosition() ────────
-        // Maps [-1, +1] → [AIM_MIN_POS, AIM_MAX_POS], consistent with TeleOp.
-        double aimInput = gamepad2.left_stick_x;
-        if (Math.abs(aimInput) > AIM_DEADBAND) {
-            double aimPos = (aimInput + 1.0) / 2.0
-                    * (AIM_MAX_POS - AIM_MIN_POS)
-                    + AIM_MIN_POS;
-            launcher.setAimPosition(aimPos);
-        }
+        // ── Manual launcher bring-up controls ─────────────────────────────────
+        manualLauncher.update(gamepad2, dt);
 
         // ── Telemetry ─────────────────────────────────────────────────────────
         Pose2D pose = drivetrain.getPose();
@@ -305,12 +239,14 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addData("  Snail mode",    gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
 
         telemetry.addLine("── Launcher ────────────────────");
-        telemetry.addData("  State", launcher.getState().name());
-        telemetry.addData("  Motor power cmd", "%.2f",
-                gamepad2.right_trigger > 0.5 ? LAUNCHER_TEST_POWER : 0.0);
+        telemetry.addData("  Mode", "MANUAL");
+        telemetry.addData("  Selected zone", manualLauncher.getSelectedZoneName());
+        telemetry.addData("  Zone RPM", "%.0f", manualLauncher.getSelectedZoneRpm());
+        telemetry.addData("  Zone hood", "%.3f", manualLauncher.getSelectedZoneHoodPosition());
+        telemetry.addData("  Target RPM", "%.0f", manualLauncher.getTargetRpmCommand());
         telemetry.addData("  Measured RPM", "%.0f", launcher.getMeasuredRpm());
-        telemetry.addData("  Hood servo pos", "%.3f", hoodServoPos);
-        telemetry.addData("  Gate servo pos", "%.3f", feederServoPos);
+        telemetry.addData("  Hood servo pos", "%.3f", manualLauncher.getHoodServoPos());
+        telemetry.addData("  Gate servo pos", "%.3f", manualLauncher.getFeederServoPos());
 
         telemetry.addLine("── Intake ──────────────────────");
         telemetry.addData("  Intake servo pos", "%.3f", intakeServoPos);
