@@ -14,8 +14,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 public class Mark2ManualLauncherController {
 
     private enum ShotZone {
-        CLOSE("CLOSE", 2000.0, 0.20),
-        FAR("FAR", 2800.0, 0.70);
+        CLOSE("CLOSE", 2500.0, 0.20),
+        FAR("FAR", 3200.0, 0.70);
 
         final String label;
         final double rpm;
@@ -98,7 +98,7 @@ public class Mark2ManualLauncherController {
 
         launcher.setFlywheelTargetRpm(targetRpmCommand);
         launcher.updateMeasuredRpm(dtSec);
-        launcher.setAimFromStick(operator.left_stick_x);
+        launcher.setAimFromStick(operator.left_stick_x, dtSec);
 
         launchSequence.update(dtSec);
 

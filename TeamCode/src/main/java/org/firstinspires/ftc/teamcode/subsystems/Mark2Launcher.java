@@ -32,7 +32,7 @@ public class Mark2Launcher {
     /** Hood servo resting position when launcher is idle. */
     public static final double HOOD_SERVO_RESET_POSITION  = 0.0;
     /** Gate servos "push" position — feeds ball into launch mechanism. */
-    public static final double FEEDER_SERVO_FEED_POSITION = 0.34;
+    public static final double FEEDER_SERVO_FEED_POSITION = 0.25;
     /** Gate servos retracted / resting position — default when not firing. */
     public static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
 
@@ -41,7 +41,11 @@ public class Mark2Launcher {
     /** Maximum aim servo position reached by full-right stick input. */
     public static final double AIM_MAX_POS = 1.0;
     /** Stick deadzone applied to manual aim control. */
-    public static final double AIM_STICK_DEADZONE = 0.05;
+    public static final double AIM_STICK_DEADZONE = 0.08;
+    /** Maximum manual aim travel speed in servo-position units per second. */
+    public static final double AIM_MAX_RATE_PER_SEC = 0.35;
+    /** Curves manual aim stick input so small stick motions are less sensitive. */
+    public static final double AIM_STICK_CURVE = 2.0;
 
     /** Encoder ticks per motor revolution. Update if the launcher motor model changes. */
     private static final double MOTOR_TICKS_PER_REV = 28.0;
@@ -215,16 +219,28 @@ public class Mark2Launcher {
     }
 
     /**
-     * Map a manual aim stick input to the shared aim servo range.
-     * Inputs inside {@link #AIM_STICK_DEADZONE} leave the current aim position unchanged.
+     * Rate-control manual aim from stick input using a nominal 50 Hz loop.
      */
     public void setAimFromStick(double stickX) {
-        if (Math.abs(stickX) <= AIM_STICK_DEADZONE) return;
+        setAimFromStick(stickX, 0.02);
+    }
 
-        double aimPos = (stickX + 1.0) / 2.0
-                * (AIM_MAX_POS - AIM_MIN_POS)
-                + AIM_MIN_POS;
-        setAimPosition(aimPos);
+    /**
+     * Rate-control manual aim from stick input.
+     * Inputs inside {@link #AIM_STICK_DEADZONE} leave the current aim position unchanged.
+     */
+    public void setAimFromStick(double stickX, double dtSec) {
+        if (!hasServos) return;
+
+        double stickAbs = Math.abs(stickX);
+        if (stickAbs <= AIM_STICK_DEADZONE) return;
+
+        double usableStick = (stickAbs - AIM_STICK_DEADZONE) / (1.0 - AIM_STICK_DEADZONE);
+        double curvedStick = Math.pow(clamp(usableStick, 0.0, 1.0), AIM_STICK_CURVE);
+        double direction = Math.signum(stickX);
+        double aimStep = direction * curvedStick * AIM_MAX_RATE_PER_SEC * Math.max(dtSec, 0.0);
+
+        setAimPosition(aimServoPos + aimStep);
     }
 
     /** Last commanded aim servo position. Returns 0.5 if servos not installed. */

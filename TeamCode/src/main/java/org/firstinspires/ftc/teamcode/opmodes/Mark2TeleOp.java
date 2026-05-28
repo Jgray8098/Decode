@@ -20,8 +20,8 @@ import java.util.Locale;
  *   Right bumper      - toggle alliance flip
  *
  * Gamepad 2:
- *   Dpad Up press     - toggle close launcher preset, 2000 RPM and hood 0.20
- *   Dpad Down press   - toggle far launcher preset, 2800 RPM and hood 0.70
+ *   Dpad Up press     - toggle close launcher preset
+ *   Dpad Down press   - toggle far launcher preset
  *   B press           - run launch-feed sequence, only if flywheel is on
  *   Y press/hold      - return feeder gate to idle and run intake forward
  *   X hold            - intake reverse, only when launch sequence is idle
