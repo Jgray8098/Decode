@@ -95,6 +95,10 @@ public class Mark2TeleOp extends OpMode {
                 manualLauncher.getTargetRpmCommand()));
         telemetry.addData("  Measured RPM", String.format(Locale.US, "%.0f",
                 launcher.getMeasuredRpm()));
+        telemetry.addData("  Motor RPM", String.format(Locale.US, "%.0f / %.0f",
+                launcher.getMeasuredRpmOne(), launcher.getMeasuredRpmTwo()));
+        telemetry.addData("  Motor power", String.format(Locale.US, "%.2f / %.2f",
+                launcher.getFlywheelPowerOne(), launcher.getFlywheelPowerTwo()));
         telemetry.addData("  Aim pos", String.format(Locale.US, "%.3f",
                 launcher.getAimPosition()));
         telemetry.addData("  Hood pos", String.format(Locale.US, "%.3f",
