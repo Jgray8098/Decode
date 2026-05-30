@@ -34,7 +34,7 @@ public class Mark2Launcher {
     /** Gate servos "push" position — feeds ball into launch mechanism. */
     public static final double FEEDER_SERVO_FEED_POSITION = 0.25;
     /** Gate servos retracted / resting position — default when not firing. */
-    public static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+    public static final double FEEDER_SERVO_IDLE_POSITION = 0.50;
 
     /** Minimum aim servo position reached by full-left stick input. */
     public static final double AIM_MIN_POS = 0.0;
@@ -60,10 +60,10 @@ public class Mark2Launcher {
     private static final double NOMINAL_VOLTAGE = 12.0;
 
     // Default custom flywheel velocity controller gains.
-    private static final double DEFAULT_FLYWHEEL_KS = 0.04;
+    private static final double DEFAULT_FLYWHEEL_KS = 0.2;
     private static final double DEFAULT_FLYWHEEL_KV =
             (1.0 - DEFAULT_FLYWHEEL_KS) / FLYWHEEL_MAX_RPM;
-    private static final double DEFAULT_FLYWHEEL_KP = 0.00035;
+    private static final double DEFAULT_FLYWHEEL_KP = 0.001;
     private static final double DEFAULT_FLYWHEEL_KI = 0.0;
     private static final double DEFAULT_FLYWHEEL_KD = 0.0;
 

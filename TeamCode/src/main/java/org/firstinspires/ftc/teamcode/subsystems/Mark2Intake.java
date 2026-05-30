@@ -21,7 +21,7 @@ public class Mark2Intake {
      * Motor two power as a fraction of {@link #INTAKE_POWER} when running in
      * differential (TeleOp) mode.
      */
-    private static final double INTAKE_MOTOR_TWO_FRACTION  = 1.0 / 3.0;
+    private static final double INTAKE_MOTOR_TWO_FRACTION  = 1.0 / 3;
 
     /** Arm raised — default position when idle, stopped, or reversing. */
     private static final double INTAKE_SERVO_STOWED_POSITION  = 0.34;

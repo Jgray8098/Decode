@@ -14,7 +14,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 public class Mark2ManualLauncherController {
 
     private enum ShotZone {
-        CLOSE("CLOSE", 2500.0, 0.20),
+        CLOSE("CLOSE", 2500.0, 0.70),
         FAR("FAR", 3200.0, 0.70);
 
         final String label;
