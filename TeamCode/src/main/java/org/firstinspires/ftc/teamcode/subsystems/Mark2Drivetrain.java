@@ -48,6 +48,15 @@ public class Mark2Drivetrain {
      */
     private boolean allianceFlipped = false;
 
+    /**
+     * When true, driver stick inputs are interpreted in the field frame:
+     * "push forward" always moves the robot toward the far wall regardless of
+     * robot heading.  Requires a Pinpoint odometry pod for heading data.
+     * If no Pinpoint is present this flag is accepted but has no effect
+     * (falls back to robot-centric).  Toggle with {@link #toggleFieldCentric()}.
+     */
+    private boolean fieldCentric = false;
+
     // -------------------------------------------------------------------------
     // driveToPosition / aim — PID gains  (tune with Constants.java as reference)
     // -------------------------------------------------------------------------
@@ -293,6 +302,20 @@ public class Mark2Drivetrain {
         double right   = flip * applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoTranslate);
         double rotate  = applyExpo(applyDeadzone(-gamepad.left_stick_x,  deadzone), expoRotate);
 
+        // Field-centric: rotate the translation vector by the robot's current heading
+        // so "stick forward" always moves toward the field's far wall regardless of
+        // which direction the robot is pointing.  No-ops gracefully if no Pinpoint.
+        if (fieldCentric && hasPinpoint) {
+            odometryPods.update();
+            double heading = odometryPods.getPosition().getHeading(AngleUnit.RADIANS);
+            double cosH = Math.cos(-heading);
+            double sinH = Math.sin(-heading);
+            double fcForward = forward * cosH - right * sinH;
+            double fcRight   = forward * sinH + right * cosH;
+            forward = fcForward;
+            right   = fcRight;
+        }
+
         double fl = forward + right + rotate;
         double fr = forward - right - rotate;
         double bl = forward - right + rotate;
@@ -320,6 +343,25 @@ public class Mark2Drivetrain {
     /** @return {@code true} if the drive controls are currently flipped for the opposite alliance. */
     public boolean isAllianceFlipped() {
         return allianceFlipped;
+    }
+
+    /**
+     * Toggle field-centric driving.  When enabled, driver stick inputs are
+     * resolved in the field frame using the Pinpoint heading.  When no
+     * Pinpoint is present the toggle is accepted but has no effect.
+     */
+    public void toggleFieldCentric() {
+        fieldCentric = !fieldCentric;
+    }
+
+    /** @return {@code true} if field-centric mode is currently active (and heading data is available). */
+    public boolean isFieldCentric() {
+        return fieldCentric && hasPinpoint;
+    }
+
+    /** @return {@code true} if field-centric mode is toggled on (regardless of Pinpoint availability). */
+    public boolean isFieldCentricEnabled() {
+        return fieldCentric;
     }
 
     /**

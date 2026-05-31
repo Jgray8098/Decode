@@ -18,6 +18,7 @@ import java.util.Locale;
  *   Left stick X      - rotate
  *   Left trigger      - snail mode
  *   Right bumper      - toggle alliance flip
+ *   Right trigger     - toggle field-centric driving (requires Pinpoint)
  *
  * Gamepad 2:
  *   Dpad Up press     - toggle close launcher preset
@@ -38,6 +39,7 @@ public class Mark2TeleOp extends OpMode {
     private long lastNs;
 
     private boolean prevRB1 = false;
+    private boolean prevRT1 = false;   // GP1 right trigger — field-centric toggle
 
     @Override
     public void init() {
@@ -69,6 +71,13 @@ public class Mark2TeleOp extends OpMode {
         }
         prevRB1 = rb1;
 
+        // GP1 right trigger (rising edge) — toggle field-centric driving
+        boolean rt1 = gamepad1.right_trigger > 0.5;
+        if (rt1 && !prevRT1) {
+            drivetrain.toggleFieldCentric();
+        }
+        prevRT1 = rt1;
+
         drivetrain.driveSafe(gamepad1);
 
         manualLauncher.update(gamepad2, dt);
@@ -81,6 +90,9 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped()
                 ? "FLIPPED (RB to restore)" : "normal  (RB to flip)");
         telemetry.addData("  Snail mode", gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
+        telemetry.addData("  Field-centric", drivetrain.isFieldCentricEnabled()
+                ? (drivetrain.isFieldCentric() ? "ON  (RT to disable)" : "ON - NO PINPOINT (robot-centric)")
+                : "off (RT to enable)");
 
         telemetry.addLine("-- Launcher ------------------------");
         telemetry.addData("  Mode", "MANUAL");
