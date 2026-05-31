@@ -18,6 +18,8 @@ import java.util.Locale;
  *   Left stick X      - rotate
  *   Left trigger      - snail mode
  *   Right bumper      - toggle alliance flip
+ *   Right trigger     - toggle field-centric driving (resets heading reference on enable)
+ *   Back button       - re-zero field-centric heading reference
  *
  * Gamepad 2:
  *   Dpad Up press     - toggle close launcher preset
@@ -38,6 +40,8 @@ public class Mark2TeleOp extends OpMode {
     private long lastNs;
 
     private boolean prevRB1 = false;
+    private boolean prevRT1 = false;   // GP1 right trigger — field-centric toggle
+    private boolean prevBack1 = false; // GP1 back button  — re-zero field-centric heading
 
     @Override
     public void init() {
@@ -69,6 +73,20 @@ public class Mark2TeleOp extends OpMode {
         }
         prevRB1 = rb1;
 
+        // GP1 right trigger (rising edge) — toggle field-centric driving
+        boolean rt1 = gamepad1.right_trigger > 0.5;
+        if (rt1 && !prevRT1) {
+            drivetrain.toggleFieldCentric();
+        }
+        prevRT1 = rt1;
+
+        // GP1 back button (rising edge) — re-zero the field-centric heading reference
+        boolean back1 = gamepad1.back;
+        if (back1 && !prevBack1) {
+            drivetrain.resetFieldCentricHeading();
+        }
+        prevBack1 = back1;
+
         drivetrain.driveSafe(gamepad1);
 
         manualLauncher.update(gamepad2, dt);
@@ -81,6 +99,20 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped()
                 ? "FLIPPED (RB to restore)" : "normal  (RB to flip)");
         telemetry.addData("  Snail mode", gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
+        telemetry.addData("  Field-centric", drivetrain.hasPinpoint()
+                ? (drivetrain.isFieldCentric() ? "ON  (RT=disable, Back=re-zero)" : "off (RT to enable)")
+                : "unavailable (no Pinpoint)");
+
+        if (drivetrain.hasPinpoint()) {
+            org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
+            telemetry.addLine("-- Odometry ------------------------");
+            telemetry.addData("  X (in)", String.format(Locale.US, "%.2f",
+                    pose.getX(org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH)));
+            telemetry.addData("  Y (in)", String.format(Locale.US, "%.2f",
+                    pose.getY(org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH)));
+            telemetry.addData("  Heading (°)", String.format(Locale.US, "%.1f",
+                    pose.getHeading(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.DEGREES)));
+        }
 
         telemetry.addLine("-- Launcher ------------------------");
         telemetry.addData("  Mode", "MANUAL");
