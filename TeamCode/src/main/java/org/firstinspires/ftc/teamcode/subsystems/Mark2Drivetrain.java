@@ -1,15 +1,19 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.I2cDeviceSynchSimple;
+import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+
+import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.IMU_SENSOR;
 
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_LEFT_MOTOR;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_RIGHT_MOTOR;
@@ -22,11 +26,15 @@ public class Mark2Drivetrain {
     private DcMotor backLeftMotor;
     private DcMotor backRightMotor;
 
-    // IMU removed — not currently installed on robot.-+6
-    // Restore: add `import com.qualcomm.robotcore.hardware.IMU;`,
-    // re-add `import static ...Mark2HardwareMapNames.IMU_SENSOR;`,
-    // add `private IMU imu;`, and `imu = hardwareMap.get(IMU.class, IMU_SENSOR);`
-    // in both constructors.
+    // IMU — built into the Control Hub; always available, no extra hardware needed.
+    // Orientation must match how the Control Hub is physically mounted on the robot.
+    // Current setting matches MecanumDriveField: Logo facing LEFT, USB facing UP.
+    // If yaw rotates the wrong way during field-centric, swap Logo/USB direction here.
+    private IMU imu;
+    private static final RevHubOrientationOnRobot IMU_ORIENTATION =
+            new RevHubOrientationOnRobot(
+                    RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
+                    RevHubOrientationOnRobot.UsbFacingDirection.UP);
 
     //FOR THE ODOMETRY PODS, reference SensorOctoQuad.java and/or SensorGoBildaPinpoint.java
     private GoBildaPinpointDriver odometryPods;
@@ -98,12 +106,16 @@ public class Mark2Drivetrain {
 
         frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        imu = hardwareMap.get(IMU.class, IMU_SENSOR);
+        imu.initialize(new IMU.Parameters(IMU_ORIENTATION));
     }
 
     /**
      * No-Pinpoint constructor for bench / initial testing without odometry hardware.
      * {@link #driveToPosition} and {@link #aim} are no-ops (return false immediately).
      * {@link #getPose} returns a zeroed pose.
+     * Field-centric driving is still available via the built-in Control Hub IMU.
      */
     public Mark2Drivetrain(HardwareMap hardwareMap){
         frontLeftMotor  = hardwareMap.dcMotor.get(FRONT_LEFT_MOTOR);
@@ -115,6 +127,9 @@ public class Mark2Drivetrain {
 
         frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        imu = hardwareMap.get(IMU.class, IMU_SENSOR);
+        imu.initialize(new IMU.Parameters(IMU_ORIENTATION));
     }
 
 //    public void driveTeleop(double forward, double right, double rotate) {
@@ -302,18 +317,17 @@ public class Mark2Drivetrain {
         double right   = flip * applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoTranslate);
         double rotate  = applyExpo(applyDeadzone(-gamepad.left_stick_x,  deadzone), expoRotate);
 
-        // Field-centric: rotate the translation vector by the robot's current heading
-        // so "stick forward" always moves toward the field's far wall regardless of
-        // which direction the robot is pointing.  No-ops gracefully if no Pinpoint.
-        if (fieldCentric && hasPinpoint) {
-            odometryPods.update();
-            double heading = odometryPods.getPosition().getHeading(AngleUnit.RADIANS);
-            double cosH = Math.cos(-heading);
-            double sinH = Math.sin(-heading);
-            double fcForward = forward * cosH - right * sinH;
-            double fcRight   = forward * sinH + right * cosH;
-            forward = fcForward;
-            right   = fcRight;
+        // Field-centric: rotate the translation vector by the robot's current IMU yaw so
+        // "stick forward" always moves toward the field's far wall regardless of heading.
+        // The yaw is reset to 0 each time field-centric is toggled on, so the direction
+        // the robot is facing at that moment becomes "field forward."
+        if (fieldCentric) {
+            double heading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+            double theta = Math.atan2(forward, right);
+            double r     = Math.hypot(forward, right);
+            theta        = AngleUnit.normalizeRadians(theta - heading);
+            forward = r * Math.sin(theta);
+            right   = r * Math.cos(theta);
         }
 
         double fl = forward + right + rotate;
@@ -347,21 +361,31 @@ public class Mark2Drivetrain {
 
     /**
      * Toggle field-centric driving.  When enabled, driver stick inputs are
-     * resolved in the field frame using the Pinpoint heading.  When no
-     * Pinpoint is present the toggle is accepted but has no effect.
+     * resolved in the field frame using the Control Hub IMU yaw.
+     * <p>Toggling <b>on</b> automatically resets the IMU yaw so the direction
+     * the robot is facing at that moment becomes "field forward."  Toggling
+     * off restores normal robot-centric behaviour.</p>
      */
     public void toggleFieldCentric() {
         fieldCentric = !fieldCentric;
+        if (fieldCentric) {
+            imu.resetYaw();   // current heading becomes the "forward" reference
+        }
     }
 
-    /** @return {@code true} if field-centric mode is currently active (and heading data is available). */
+    /** @return {@code true} if field-centric mode is currently active. */
     public boolean isFieldCentric() {
-        return fieldCentric && hasPinpoint;
+        return fieldCentric;
     }
 
-    /** @return {@code true} if field-centric mode is toggled on (regardless of Pinpoint availability). */
-    public boolean isFieldCentricEnabled() {
-        return fieldCentric;
+    /**
+     * Manually zero the IMU yaw reference while field-centric is active.
+     * Useful if the driver wants to re-align "forward" mid-match without
+     * toggling field-centric off and on again.
+     * Maps to GP1 back button in the OpModes.
+     */
+    public void resetFieldCentricHeading() {
+        imu.resetYaw();
     }
 
     /**

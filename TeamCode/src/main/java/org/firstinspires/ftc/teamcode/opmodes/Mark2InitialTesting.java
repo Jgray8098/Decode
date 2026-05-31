@@ -41,7 +41,8 @@ import java.util.Locale;
  *  │  Right bumper       →  toggle alliance-flip (reverses fwd   │
  *  │                         + strafe for opposite-side driving) │
  *  │  Right trigger      →  toggle field-centric driving         │
- *  │                         (requires Pinpoint; no-op without)  │
+ *  │                         (resets heading reference on enable) │
+ *  │  Back button        →  re-zero field-centric heading        │
  *  │  START              →  confirm safety during INIT           │
  *  └──────────────────────────────────────────────────────────────┘
  *
@@ -107,6 +108,7 @@ public class Mark2InitialTesting extends OpMode {
     private boolean prevStartGp1 = false;
     private boolean prevRB1      = false;   // GP1 right bumper — alliance flip toggle
     private boolean prevRT1      = false;   // GP1 right trigger — field-centric toggle
+    private boolean prevBack1    = false;   // GP1 back button  — re-zero field-centric heading
 
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -205,6 +207,11 @@ public class Mark2InitialTesting extends OpMode {
         if (rt1 && !prevRT1) drivetrain.toggleFieldCentric();
         prevRT1 = rt1;
 
+        // GP1 back button (rising edge) — re-zero field-centric heading reference
+        boolean back1 = gamepad1.back;
+        if (back1 && !prevBack1) drivetrain.resetFieldCentricHeading();
+        prevBack1 = back1;
+
         drivetrain.driveSafe(gamepad1);
 
         // ── Intake motors ─────────────────────────────────────────────────────
@@ -245,9 +252,8 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addData("  Heading (°)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped() ? "FLIPPED (GP1 RB to restore)" : "normal  (GP1 RB to flip)");
         telemetry.addData("  Snail mode",    gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
-        telemetry.addData("  Field-centric", drivetrain.isFieldCentricEnabled()
-                ? (drivetrain.isFieldCentric() ? "ON  (GP1 RT to disable)" : "ON - NO PINPOINT (robot-centric)")
-                : "off (GP1 RT to enable)");
+        telemetry.addData("  Field-centric", drivetrain.isFieldCentric()
+                ? "ON  (GP1 RT=disable, Back=re-zero)" : "off (GP1 RT to enable)");
 
         telemetry.addLine("── Launcher ────────────────────");
         telemetry.addData("  Mode", "MANUAL");
