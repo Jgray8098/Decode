@@ -252,8 +252,10 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addData("  Heading (°)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped() ? "FLIPPED (GP1 RB to restore)" : "normal  (GP1 RB to flip)");
         telemetry.addData("  Snail mode",    gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
-        telemetry.addData("  Field-centric", drivetrain.isFieldCentric()
-                ? "ON  (GP1 RT=disable, Back=re-zero)" : "off (GP1 RT to enable)");
+        telemetry.addData("  Pinpoint",      drivetrain.hasPinpoint() ? "CONNECTED" : "not found");
+        telemetry.addData("  Field-centric", drivetrain.hasPinpoint()
+                ? (drivetrain.isFieldCentric() ? "ON  (GP1 RT=disable, Back=re-zero)" : "off (GP1 RT to enable)")
+                : "unavailable (no Pinpoint)");
 
         telemetry.addLine("── Launcher ────────────────────");
         telemetry.addData("  Mode", "MANUAL");

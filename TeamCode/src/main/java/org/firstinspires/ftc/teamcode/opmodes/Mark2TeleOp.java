@@ -99,8 +99,20 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped()
                 ? "FLIPPED (RB to restore)" : "normal  (RB to flip)");
         telemetry.addData("  Snail mode", gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
-        telemetry.addData("  Field-centric", drivetrain.isFieldCentric()
-                ? "ON  (RT=disable, Back=re-zero)" : "off (RT to enable)");
+        telemetry.addData("  Field-centric", drivetrain.hasPinpoint()
+                ? (drivetrain.isFieldCentric() ? "ON  (RT=disable, Back=re-zero)" : "off (RT to enable)")
+                : "unavailable (no Pinpoint)");
+
+        if (drivetrain.hasPinpoint()) {
+            org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
+            telemetry.addLine("-- Odometry ------------------------");
+            telemetry.addData("  X (in)", String.format(Locale.US, "%.2f",
+                    pose.getX(org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH)));
+            telemetry.addData("  Y (in)", String.format(Locale.US, "%.2f",
+                    pose.getY(org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH)));
+            telemetry.addData("  Heading (°)", String.format(Locale.US, "%.1f",
+                    pose.getHeading(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.DEGREES)));
+        }
 
         telemetry.addLine("-- Launcher ------------------------");
         telemetry.addData("  Mode", "MANUAL");
