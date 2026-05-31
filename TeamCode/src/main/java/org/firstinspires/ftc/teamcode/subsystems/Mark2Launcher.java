@@ -5,9 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
-
-import org.firstinspires.ftc.teamcode.utility.InterpolatingTreeMap;
-import org.firstinspires.ftc.teamcode.utility.LaunchSetpoint;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_MOTOR_ONE;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.LAUNCHER_MOTOR_TWO;
@@ -19,34 +17,12 @@ import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.AI
 
 
 /**
- * Launcher subsystem.
+ * Launcher hardware subsystem.
  *
- * Usage (inside an OpMode):
- *
- *   // init()
- *   launcher = new Launcher(hardwareMap);
- *
- *   // loop()
- *   if (triggerShot) launcher.shoot(distanceInches);
- *   launcher.update(dt);   // MUST be called every loop
- *   if (launcher.getState() == Launcher.State.DONE) launcher.stop();
+ * <p>This class owns motors, servos, and RPM measurement only. Manual and
+ * automated game logic live in launcher controller classes.</p>
  */
 public class Mark2Launcher {
-
-
-    // -------------------------------------------------------------------------
-    // State machine
-    // -------------------------------------------------------------------------
-    public enum LauncherState {
-        /** Motors off, servos retracted. */
-        IDLE,
-        /** Motors running; waiting for measured RPM to reach the ready threshold. */
-        SPINNING_UP,
-        /** RPM threshold met; feeder gate servos have been triggered. */
-        FEEDING,
-        /** Shot complete. Call stop() or resetFeeder() to return to IDLE. */
-        DONE
-    }
 
     // Hardware-map names live in Mark2HardwareMapNames — imported as static above.
 
@@ -56,51 +32,50 @@ public class Mark2Launcher {
     /** Hood servo resting position when launcher is idle. */
     public static final double HOOD_SERVO_RESET_POSITION  = 0.0;
     /** Gate servos "push" position — feeds ball into launch mechanism. */
-    public static final double FEEDER_SERVO_FEED_POSITION = 0.24;
+    public static final double FEEDER_SERVO_FEED_POSITION = 0.25;
     /** Gate servos retracted / resting position — default when not firing. */
-    public static final double FEEDER_SERVO_IDLE_POSITION = 0.58;
+    public static final double FEEDER_SERVO_IDLE_POSITION = 0.50;
 
-    /**
-     * How long the feeder gate servos stay at {@link #FEEDER_SERVO_FEED_POSITION}
-     * before the state machine advances to DONE and retracts them.
-     * Increase if the servo hasn't completed its travel before resetting.  (tune!)
-     */
-    public static final double FEEDING_DWELL_MS = 300.0;   // TUNE
+    /** Minimum aim servo position reached by full-left stick input. */
+    public static final double AIM_MIN_POS = 0.0;
+    /** Maximum aim servo position reached by full-right stick input. */
+    public static final double AIM_MAX_POS = 1.0;
+    /** Stick deadzone applied to manual aim control. */
+    public static final double AIM_STICK_DEADZONE = 0.08;
+    /** Maximum manual aim travel speed in servo-position units per second. */
+    public static final double AIM_MAX_RATE_PER_SEC = 0.35;
+    /** Curves manual aim stick input so small stick motions are less sensitive. */
+    public static final double AIM_STICK_CURVE = 2.0;
 
+    /** Encoder ticks per motor revolution. Update if the launcher motor model changes. */
+    private static final double MOTOR_TICKS_PER_REV = 28.0;
 
-    /** Encoder ticks per output-shaft revolution for your GoBilda motor model. */
-    private static final double MOTOR_TICKS_PER_REV = 537.7;   // 312 RPM Yellow Jacket — change to match your model
+    /** Flywheel revolutions per motor revolution. Mark2 launcher is currently 1:1. */
+    private static final double FLYWHEEL_PER_MOTOR_REV = 1.0;
 
-    /**
-     * Free-spin RPM at the motor OUTPUT shaft at nominal voltage (12 V).
-     * This equals the rated RPM printed on the GoBilda motor label.
-     */
-    private static final double MOTOR_FREE_RPM = 312.0;         // change to match your model
+    /** Approximate free speed used by the custom feedforward model. Tune on robot. */
+    private static final double FLYWHEEL_MAX_RPM = 6000.0;
 
-    /**
-     * External gear / belt / chain ratio between the motor output shaft and
-     * the launcher wheel.
-     *   > 1.0  →  launcher wheel spins FASTER than the motor output shaft
-     *   = 1.0  →  direct drive
-     *   < 1.0  →  launcher wheel spins SLOWER (reduction)
-     * Example: 24-tooth motor sprocket driving a 12-tooth wheel sprocket → 2.0
-     */
-    private static final double EXTERNAL_GEAR_RATIO = 1.0;
+    /** Nominal battery voltage used for voltage compensation. */
+    private static final double NOMINAL_VOLTAGE = 12.0;
 
-    /** Estimated free-spin RPM at the launcher wheel at nominal voltage. */
-    private static final double LAUNCHER_FREE_RPM = MOTOR_FREE_RPM * EXTERNAL_GEAR_RATIO;
+    // Default custom flywheel velocity controller gains.
+    private static final double DEFAULT_FLYWHEEL_KS = 0.2;
+    private static final double DEFAULT_FLYWHEEL_KV =
+            (1.0 - DEFAULT_FLYWHEEL_KS) / FLYWHEEL_MAX_RPM;
+    private static final double DEFAULT_FLYWHEEL_KP = 0.001;
+    private static final double DEFAULT_FLYWHEEL_KI = 0.0;
+    private static final double DEFAULT_FLYWHEEL_KD = 0.0;
 
-    /**
-     * Fraction of the target RPM that counts as "at speed".
-     * 0.90 = fire once the launcher is ≥ 90 % of its target RPM.
-     */
-    private static final double RPM_READY_FRACTION = 0.90;
+    private static final double FLYWHEEL_INTEGRAL_MIN = -500.0;
+    private static final double FLYWHEEL_INTEGRAL_MAX = 500.0;
 
     // -------------------------------------------------------------------------
     // Hardware
     // -------------------------------------------------------------------------
     private DcMotorEx launcherMotorOne;
     private DcMotorEx launcherMotorTwo;
+    private VoltageSensor battery;
     private Servo hoodPositionServo;
     private Servo gateServoLeft;
     private Servo gateServoRight;
@@ -115,24 +90,24 @@ public class Mark2Launcher {
     private final boolean hasServos;
 
     // -------------------------------------------------------------------------
-    // Distance → motor power setpoints
-    //   Key   = distance to target (inches)
-    //   Value = motor power  [0.0 – 1.0]
-    //
-    //   Add / adjust entries to match your robot's real-world performance.
+    // RPM measurement state
     // -------------------------------------------------------------------------
-    private final InterpolatingTreeMap powerMap = new InterpolatingTreeMap();
-
-    // -------------------------------------------------------------------------
-    // State
-    // -------------------------------------------------------------------------
-    private LauncherState state = LauncherState.IDLE;
-    private double targetPower  = 0.0;
-    private double targetRpm    = 0.0;
     private double measuredRpm  = 0.0;
-
-    /** Accumulates time (ms) spent in the FEEDING state for the dwell timer. */
-    private double feedingElapsedMs = 0.0;
+    private double measuredRpmOne = 0.0;
+    private double measuredRpmTwo = 0.0;
+    private double targetRpm = 0.0;
+    private double targetTicksPerSec = 0.0;
+    private double flywheelPowerOne = 0.0;
+    private double flywheelPowerTwo = 0.0;
+    private double flywheelKs = DEFAULT_FLYWHEEL_KS;
+    private double flywheelKv = DEFAULT_FLYWHEEL_KV;
+    private double flywheelKp = DEFAULT_FLYWHEEL_KP;
+    private double flywheelKi = DEFAULT_FLYWHEEL_KI;
+    private double flywheelKd = DEFAULT_FLYWHEEL_KD;
+    private double integralOne = 0.0;
+    private double integralTwo = 0.0;
+    private double previousErrorOne = 0.0;
+    private double previousErrorTwo = 0.0;
 
     // Fallback tick-based velocity
     private int lastPosOne = 0;
@@ -164,6 +139,10 @@ public class Mark2Launcher {
         launcherMotorOne = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_ONE);
         launcherMotorTwo = hardwareMap.get(DcMotorEx.class, LAUNCHER_MOTOR_TWO);
 
+        if (hardwareMap.voltageSensor != null && hardwareMap.voltageSensor.iterator().hasNext()) {
+            battery = hardwareMap.voltageSensor.iterator().next();
+        }
+
         if (hasServos) {
             hoodPositionServo = hardwareMap.servo.get(HOOD_SERVO);
             gateServoLeft     = hardwareMap.servo.get(GATE_SERVO_LEFT);
@@ -190,103 +169,68 @@ public class Mark2Launcher {
         lastPosTwo = launcherMotorTwo.getCurrentPosition();
 
 
-        // --- Distance (inches) → LaunchSetpoint (rpm, hoodPosition)  (tune!) ---
-        //   rpm          = target launcher-wheel RPM for this shot distance
-        //   hoodPosition = servo position [0.0–1.0] for hood servo
-        //                  (0.0 = lowest angle, 1.0 = highest angle)
-        powerMap.put(24.0,  new LaunchSetpoint(2000.0, 0.10));
-        powerMap.put(48.0,  new LaunchSetpoint(2500.0, 0.20));
-        powerMap.put(72.0,  new LaunchSetpoint(3000.0, 0.30));
-        powerMap.put(96.0,  new LaunchSetpoint(3800.0, 0.42));
-        powerMap.put(120.0, new LaunchSetpoint(4500.0, 0.55));
-        powerMap.put(144.0, new LaunchSetpoint(5400.0, 0.70));
     }
 
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
 
-    public void shoot(double distanceFromTargetInches) {
-        if (state != LauncherState.IDLE && state != LauncherState.DONE) return;
-
-        LaunchSetpoint setpoint = powerMap.get(distanceFromTargetInches);
-        targetRpm   = setpoint.rpm;
-        targetPower = Math.min(targetRpm / LAUNCHER_FREE_RPM, 1.0);
-
-        launcherMotorOne.setPower(targetPower);
-        launcherMotorTwo.setPower(targetPower);
-
-        if (hasServos) {
-            hoodPositionServo.setPosition(setpoint.hoodPosition);
-            setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
+    /** Command both launcher motors to hold a target flywheel RPM. */
+    public void setFlywheelTargetRpm(double rpm) {
+        double newTargetRpm = Math.max(0.0, rpm);
+        if (Math.abs(newTargetRpm - targetRpm) > 1e-6) {
+            resetFlywheelController();
         }
 
-        state = LauncherState.SPINNING_UP;
-    }
+        targetRpm = newTargetRpm;
+        targetTicksPerSec = flywheelRpmToMotorTicksPerSec(targetRpm);
 
-    public void update(double dtSec) {
-        switch (state) {
-
-            case SPINNING_UP: {
-                double tpsOne = estimateTps(launcherMotorOne, true,  dtSec);
-                double tpsTwo = estimateTps(launcherMotorTwo, false, dtSec);
-                measuredRpm = (tpsToRpm(tpsOne) + tpsToRpm(tpsTwo)) / 2.0;
-
-                if (measuredRpm >= targetRpm * RPM_READY_FRACTION) {
-                    if (hasServos) setFeederPosition(FEEDER_SERVO_FEED_POSITION);
-                    feedingElapsedMs = 0.0;   // reset dwell timer
-                    state = LauncherState.FEEDING;
-                }
-                break;
-            }
-
-            case FEEDING:
-                // Hold feeder at FEED_POSITION for FEEDING_DWELL_MS before retracting.
-                feedingElapsedMs += dtSec * 1000.0;
-                if (feedingElapsedMs >= FEEDING_DWELL_MS) {
-                    state = LauncherState.DONE;
-                }
-                break;
-
-            case DONE:
-            case IDLE:
-            default:
-                break;
+        if (targetRpm <= 0.0) {
+            launcherMotorOne.setPower(0.0);
+            launcherMotorTwo.setPower(0.0);
+            flywheelPowerOne = 0.0;
+            flywheelPowerTwo = 0.0;
         }
     }
 
-    public void stop() {
-        launcherMotorOne.setPower(0);
-        launcherMotorTwo.setPower(0);
-        if (hasServos) {
-            hoodPositionServo.setPosition(HOOD_SERVO_RESET_POSITION);
-            setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
-        }
-        state = LauncherState.IDLE;
-        targetPower = 0.0;
-        targetRpm   = 0.0;
+    /** Stop launcher motors only. */
+    public void stopFlywheels() {
+        targetRpm = 0.0;
+        targetTicksPerSec = 0.0;
+        resetFlywheelController();
+        launcherMotorOne.setPower(0.0);
+        launcherMotorTwo.setPower(0.0);
+        flywheelPowerOne = 0.0;
+        flywheelPowerTwo = 0.0;
         measuredRpm = 0.0;
+        measuredRpmOne = 0.0;
+        measuredRpmTwo = 0.0;
     }
 
+    /** Stop launcher motors and return launcher servos to their idle positions. */
+    public void stop() {
+        stopFlywheels();
+        if (hasServos) {
+            setHoodPosition(HOOD_SERVO_RESET_POSITION);
+            resetFeeder();
+        }
+    }
+
+    /** Retract the feeder gate servos to their idle position. */
     public void resetFeeder() {
-        if (hasServos) setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
-        state = LauncherState.IDLE;
-    }
-
-    public void testSpinMotors(double power) {
-        launcherMotorOne.setPower(power);
-        launcherMotorTwo.setPower(power);
+        setFeederPosition(FEEDER_SERVO_IDLE_POSITION);
     }
 
     public void setHoodPosition(double position) {
         if (!hasServos) return;
-        hoodPositionServo.setPosition(position);
+        hoodPositionServo.setPosition(clamp(position, 0.0, 1.0));
     }
 
     public void setFeederPosition(double position) {
         if (!hasServos) return;
-        gateServoLeft.setPosition(position);
-        gateServoRight.setPosition(position);
+        double clippedPosition = clamp(position, 0.0, 1.0);
+        gateServoLeft.setPosition(clippedPosition);
+        gateServoRight.setPosition(clippedPosition);
     }
 
     /**
@@ -295,32 +239,81 @@ public class Mark2Launcher {
      * requires one to be mirrored, reverse that servo in the Robot Controller
      * configuration rather than here.
      *
-     * @param position Servo position [0.0 – 1.0].
-     *                 Typically constrained by the caller to a safe sub-range
-     *                 (e.g. 0.05 – 0.95) to avoid hitting mechanical stops.
+     * @param position Servo position [0.0 - 1.0]. Values outside the shared
+     *                 aim range are clamped.
      */
     public void setAimPosition(double position) {
         if (!hasServos) return;
-        aimServoPos = position;
-        aimServoLeft.setPosition(position);
-        aimServoRight.setPosition(position);
+        aimServoPos = clamp(position, AIM_MIN_POS, AIM_MAX_POS);
+        aimServoLeft.setPosition(aimServoPos);
+        aimServoRight.setPosition(aimServoPos);
+    }
+
+    /**
+     * Rate-control manual aim from stick input using a nominal 50 Hz loop.
+     */
+    public void setAimFromStick(double stickX) {
+        setAimFromStick(stickX, 0.02);
+    }
+
+    /**
+     * Rate-control manual aim from stick input.
+     * Inputs inside {@link #AIM_STICK_DEADZONE} leave the current aim position unchanged.
+     */
+    public void setAimFromStick(double stickX, double dtSec) {
+        if (!hasServos) return;
+
+        double stickAbs = Math.abs(stickX);
+        if (stickAbs <= AIM_STICK_DEADZONE) return;
+
+        double usableStick = (stickAbs - AIM_STICK_DEADZONE) / (1.0 - AIM_STICK_DEADZONE);
+        double curvedStick = Math.pow(clamp(usableStick, 0.0, 1.0), AIM_STICK_CURVE);
+        double direction = Math.signum(stickX);
+        double aimStep = direction * curvedStick * AIM_MAX_RATE_PER_SEC * Math.max(dtSec, 0.0);
+
+        setAimPosition(aimServoPos + aimStep);
     }
 
     /** Last commanded aim servo position. Returns 0.5 if servos not installed. */
     public double getAimPosition() { return aimServoPos; }
 
-    public LauncherState getState()        { return state; }
+    /** Refresh measured launcher RPM and run the custom flywheel PIDF controller. */
+    public void updateMeasuredRpm(double dtSec) {
+        double tpsOne = estimateTps(launcherMotorOne, true,  dtSec);
+        double tpsTwo = estimateTps(launcherMotorTwo, false, dtSec);
+        measuredRpmOne = tpsToRpm(tpsOne);
+        measuredRpmTwo = tpsToRpm(tpsTwo);
+        measuredRpm = (measuredRpmOne + measuredRpmTwo) / 2.0;
+
+        updateFlywheelController(dtSec);
+    }
+
     public double getMeasuredRpm()  { return measuredRpm; }
+    public double getMeasuredRpmOne() { return measuredRpmOne; }
+    public double getMeasuredRpmTwo() { return measuredRpmTwo; }
     public double getTargetRpm()    { return targetRpm; }
-    public double getTargetPower()  { return targetPower; }
+    public double getTargetTicksPerSec() { return targetTicksPerSec; }
+    public double getFlywheelPowerOne() { return flywheelPowerOne; }
+    public double getFlywheelPowerTwo() { return flywheelPowerTwo; }
     /** Last position sent to hood servo. Returns NaN if servos not installed. */
     public double getHoodPosition()   { return hasServos ? hoodPositionServo.getPosition() : Double.NaN; }
     /** Last position sent to the feeder gate servos. Returns NaN if servos not installed. */
     public double getFeederPosition() { return hasServos ? gateServoLeft.getPosition()  : Double.NaN; }
     /** Returns {@code true} if servos are present and wired. */
     public boolean hasServos()        { return hasServos; }
-    /** Returns {@code true} once the launcher has reached the ready RPM threshold. */
-    public boolean isAtSpeed()      { return measuredRpm >= targetRpm * RPM_READY_FRACTION; }
+
+    public void setFlywheelPidCoefficients(double kP, double kI, double kD) {
+        flywheelKp = kP;
+        flywheelKi = kI;
+        flywheelKd = kD;
+        resetFlywheelController();
+    }
+
+    public void setFlywheelFeedforwardCoefficients(double kS, double kV) {
+        flywheelKs = kS;
+        flywheelKv = kV;
+        resetFlywheelController();
+    }
 
     private double estimateTps(DcMotorEx motor, boolean isMotorOne, double dtSec) {
         double v = motor.getVelocity();
@@ -334,6 +327,72 @@ public class Mark2Launcher {
     }
 
     private static double tpsToRpm(double tps) {
-        return (tps * 60.0 / MOTOR_TICKS_PER_REV) * EXTERNAL_GEAR_RATIO;
+        return (tps * 60.0 / MOTOR_TICKS_PER_REV) * FLYWHEEL_PER_MOTOR_REV;
+    }
+
+    private static double flywheelRpmToMotorTicksPerSec(double flywheelRpm) {
+        double motorRpm = flywheelRpm / FLYWHEEL_PER_MOTOR_REV;
+        return motorRpm * MOTOR_TICKS_PER_REV / 60.0;
+    }
+
+    private void updateFlywheelController(double dtSec) {
+        if (targetRpm <= 0.0) return;
+
+        flywheelPowerOne = calculateFlywheelPower(
+                targetRpm, measuredRpmOne, true, dtSec);
+        flywheelPowerTwo = calculateFlywheelPower(
+                targetRpm, measuredRpmTwo, false, dtSec);
+
+        launcherMotorOne.setPower(flywheelPowerOne);
+        launcherMotorTwo.setPower(flywheelPowerTwo);
+    }
+
+    private double calculateFlywheelPower(
+            double targetRpm, double currentRpm, boolean isMotorOne, double dtSec) {
+        double dt = Math.max(dtSec, 1e-4);
+        double error = targetRpm - currentRpm;
+
+        if (isMotorOne) {
+            integralOne = clamp(integralOne + error * dt,
+                    FLYWHEEL_INTEGRAL_MIN, FLYWHEEL_INTEGRAL_MAX);
+            double derivative = (error - previousErrorOne) / dt;
+            previousErrorOne = error;
+            return calculateFlywheelOutput(targetRpm, error, integralOne, derivative);
+        } else {
+            integralTwo = clamp(integralTwo + error * dt,
+                    FLYWHEEL_INTEGRAL_MIN, FLYWHEEL_INTEGRAL_MAX);
+            double derivative = (error - previousErrorTwo) / dt;
+            previousErrorTwo = error;
+            return calculateFlywheelOutput(targetRpm, error, integralTwo, derivative);
+        }
+    }
+
+    private double calculateFlywheelOutput(
+            double targetRpm, double error, double integral, double derivative) {
+        double voltageCompensation = NOMINAL_VOLTAGE / getBatteryVoltage();
+        double feedforward = (flywheelKs + flywheelKv * targetRpm) * voltageCompensation;
+        double feedback = flywheelKp * error
+                + flywheelKi * integral
+                + flywheelKd * derivative;
+        return clamp(feedforward + feedback, 0.0, 1.0);
+    }
+
+    private void resetFlywheelController() {
+        integralOne = 0.0;
+        integralTwo = 0.0;
+        previousErrorOne = 0.0;
+        previousErrorTwo = 0.0;
+    }
+
+    private double getBatteryVoltage() {
+        if (battery == null) return NOMINAL_VOLTAGE;
+
+        double voltage = battery.getVoltage();
+        if (voltage < 7.0 || voltage > 20.0) return NOMINAL_VOLTAGE;
+        return voltage;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 }
