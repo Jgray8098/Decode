@@ -1,0 +1,197 @@
+[
+  {
+    "name": "1 Start \u2192 AprilTagPosition",
+    "waypoints": [
+      {
+        "x": 20.461,
+        "y": 123.153,
+        "heading": 54
+      },
+      {
+        "x": 47.099,
+        "y": 95.936,
+        "heading": 74
+      }
+    ]
+  },
+  {
+    "name": "2 AprilTagPosition \u2192 LaunchPreloads",
+    "waypoints": [
+      {
+        "x": 47.099,
+        "y": 95.936,
+        "heading": 74
+      },
+      {
+        "x": 53.239,
+        "y": 99.989,
+        "heading": 155
+      }
+    ]
+  },
+  {
+    "name": "3 LaunchPreloads \u2192 AlignIntake1",
+    "waypoints": [
+      {
+        "x": 53.239,
+        "y": 99.989,
+        "heading": 155
+      },
+      {
+        "x": 44.432,
+        "y": 88.477,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "4 AlignIntake1 \u2192 IntakePurple11",
+    "waypoints": [
+      {
+        "x": 44.432,
+        "y": 88.477,
+        "heading": 180
+      },
+      {
+        "x": 37.834,
+        "y": 88.477,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "5 IntakePurple11 \u2192 IntakePurple12",
+    "waypoints": [
+      {
+        "x": 37.834,
+        "y": 88.477,
+        "heading": 180
+      },
+      {
+        "x": 32.043,
+        "y": 87.477,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "6 IntakePurple12 \u2192 IntakeGreen11",
+    "waypoints": [
+      {
+        "x": 32.043,
+        "y": 87.477,
+        "heading": 180
+      },
+      {
+        "x": 27.024,
+        "y": 87.477,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "7 IntakeGreen11 \u2192 LaunchFirstRow",
+    "waypoints": [
+      {
+        "x": 27.024,
+        "y": 87.477,
+        "heading": 180
+      },
+      {
+        "x": 51.046,
+        "y": 98.182,
+        "heading": 141
+      }
+    ]
+  },
+  {
+    "name": "8 LaunchFirstRow \u2192 AlignIntake2",
+    "waypoints": [
+      {
+        "x": 51.046,
+        "y": 98.182,
+        "heading": 141
+      },
+      {
+        "x": 46.694,
+        "y": 63.928,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "9 AlignIntake2 \u2192 IntakePurple21",
+    "waypoints": [
+      {
+        "x": 46.694,
+        "y": 63.928,
+        "heading": 180
+      },
+      {
+        "x": 38.027,
+        "y": 63.928,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "10 IntakePurple21 \u2192 IntakeGreen21",
+    "waypoints": [
+      {
+        "x": 38.027,
+        "y": 63.928,
+        "heading": 180
+      },
+      {
+        "x": 32.622,
+        "y": 62.928,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "11 IntakeGreen21 \u2192 IntakePurple22",
+    "waypoints": [
+      {
+        "x": 32.622,
+        "y": 62.928,
+        "heading": 180
+      },
+      {
+        "x": 27.41,
+        "y": 62.928,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "12 IntakePurple22 \u2192 LaunchSecondRow",
+    "waypoints": [
+      {
+        "x": 27.41,
+        "y": 62.928,
+        "heading": 180
+      },
+      {
+        "x": 52.046,
+        "y": 98.182,
+        "heading": 144
+      }
+    ]
+  },
+  {
+    "name": "13 LaunchSecondRow \u2192 Park",
+    "waypoints": [
+      {
+        "x": 52.046,
+        "y": 98.182,
+        "heading": 144
+      },
+      {
+        "x": 34.568,
+        "y": 75.475,
+        "heading": 180
+      }
+    ]
+  }
+]

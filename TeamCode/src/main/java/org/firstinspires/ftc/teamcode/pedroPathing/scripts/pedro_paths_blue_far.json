@@ -1,0 +1,197 @@
+[
+  {
+    "name": "1 Start \u2192 LaunchPreloads",
+    "waypoints": [
+      {
+        "x": 62.006,
+        "y": 9.021,
+        "heading": 90
+      },
+      {
+        "x": 59.152,
+        "y": 22.663,
+        "heading": 117
+      }
+    ]
+  },
+  {
+    "name": "2 LaunchPreloads \u2192 AlignIntake2",
+    "waypoints": [
+      {
+        "x": 59.152,
+        "y": 22.663,
+        "heading": 117
+      },
+      {
+        "x": 55.0,
+        "y": 15.0,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "3 AlignIntake2 \u2192 IntakeGP",
+    "waypoints": [
+      {
+        "x": 55.0,
+        "y": 15.0,
+        "heading": 180
+      },
+      {
+        "x": 17.454,
+        "y": 15.0,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "4 IntakeGP \u2192 AlignIntake2_2",
+    "waypoints": [
+      {
+        "x": 17.454,
+        "y": 15.0,
+        "heading": 180
+      },
+      {
+        "x": 18.951,
+        "y": 16.227,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "5 AlignIntake2_2 \u2192 AlignIntake2_3",
+    "waypoints": [
+      {
+        "x": 18.951,
+        "y": 16.227,
+        "heading": 180
+      },
+      {
+        "x": 18.969,
+        "y": 12.018,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "6 AlignIntake2_3 \u2192 IntakePP",
+    "waypoints": [
+      {
+        "x": 18.969,
+        "y": 12.018,
+        "heading": 180
+      },
+      {
+        "x": 13.675,
+        "y": 10.982,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "7 IntakePP \u2192 LaunchRow2",
+    "waypoints": [
+      {
+        "x": 13.675,
+        "y": 10.982,
+        "heading": 180
+      },
+      {
+        "x": 54.0,
+        "y": 21.0,
+        "heading": 109
+      }
+    ]
+  },
+  {
+    "name": "8 LaunchRow2 \u2192 AlignIntake1",
+    "waypoints": [
+      {
+        "x": 54.0,
+        "y": 21.0,
+        "heading": 109
+      },
+      {
+        "x": 50.0,
+        "y": 34.0,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "9 AlignIntake1 \u2192 IntakeP11",
+    "waypoints": [
+      {
+        "x": 50.0,
+        "y": 34.0,
+        "heading": 180
+      },
+      {
+        "x": 37.204,
+        "y": 34.0,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "10 IntakeP11 \u2192 IntakeP12",
+    "waypoints": [
+      {
+        "x": 37.204,
+        "y": 34.0,
+        "heading": 180
+      },
+      {
+        "x": 32.389,
+        "y": 35.0,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "11 IntakeP12 \u2192 IntakeG11",
+    "waypoints": [
+      {
+        "x": 32.389,
+        "y": 35.0,
+        "heading": 180
+      },
+      {
+        "x": 27.793,
+        "y": 35.0,
+        "heading": 180
+      }
+    ]
+  },
+  {
+    "name": "12 IntakeG11 \u2192 LaunchRow1",
+    "waypoints": [
+      {
+        "x": 27.793,
+        "y": 35.0,
+        "heading": 180
+      },
+      {
+        "x": 52.0,
+        "y": 21.0,
+        "heading": 111
+      }
+    ]
+  },
+  {
+    "name": "13 LaunchRow1 \u2192 Park",
+    "waypoints": [
+      {
+        "x": 52.0,
+        "y": 21.0,
+        "heading": 111
+      },
+      {
+        "x": 38.81,
+        "y": 15.074,
+        "heading": 90
+      }
+    ]
+  }
+]
