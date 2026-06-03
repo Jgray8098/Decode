@@ -7,6 +7,7 @@ import org.firstinspires.ftc.teamcode.control.Mark2ManualLauncherController;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
+import org.firstinspires.ftc.teamcode.utility.Mark2TargetLock;
 
 import java.util.Locale;
 
@@ -28,6 +29,7 @@ import java.util.Locale;
  *   Y press/hold      - return feeder gate to idle and run intake forward
  *   X hold            - intake reverse, only when launch sequence is idle
  *   Left stick X      - aim servo position
+ *   A hold            - lock turret on alliance goal target
  */
 @TeleOp(name = "Mark2 TeleOp", group = "Mark2")
 public class Mark2TeleOp extends OpMode {
@@ -36,6 +38,10 @@ public class Mark2TeleOp extends OpMode {
     private Mark2Intake intake;
     private Mark2Launcher launcher;
     private Mark2ManualLauncherController manualLauncher;
+    private Mark2TargetLock targetLock;
+
+    // Change Mark2TargetLock.DEFAULT_ALLIANCE before a match if your alliance changes.
+    private static final Mark2TargetLock.Alliance TARGET_LOCK_ALLIANCE = Mark2TargetLock.DEFAULT_ALLIANCE;
 
     private long lastNs;
 
@@ -50,6 +56,8 @@ public class Mark2TeleOp extends OpMode {
         launcher = new Mark2Launcher(hardwareMap);
         manualLauncher = new Mark2ManualLauncherController(launcher, intake);
 
+        targetLock = new Mark2TargetLock();
+
         launcher.resetFeeder();
 
         lastNs = System.nanoTime();
@@ -58,6 +66,7 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addLine("GP1: Drive   GP2: Intake + Launcher");
         telemetry.addLine("GP2 DUp=Close toggle DDn=Far toggle");
         telemetry.addLine("GP2 B=Launch Y=Intake+GateIdle X=Reverse");
+        telemetry.addLine("GP2 A(hold)=Turret target lock");
         telemetry.update();
     }
 
@@ -90,6 +99,12 @@ public class Mark2TeleOp extends OpMode {
         drivetrain.driveSafe(gamepad1);
 
         manualLauncher.update(gamepad2, dt);
+
+        // Hold-only safety behavior: lock is active only while GP2 A is pressed.
+        if (gamepad2.a && drivetrain.hasPinpoint()) {
+            org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
+            targetLock.lockToGoal(launcher, pose, TARGET_LOCK_ALLIANCE);
+        }
 
         showTelemetry();
     }
@@ -133,6 +148,20 @@ public class Mark2TeleOp extends OpMode {
                 launcher.getFlywheelPowerOne(), launcher.getFlywheelPowerTwo()));
         telemetry.addData("  Aim pos", String.format(Locale.US, "%.3f",
                 launcher.getAimPosition()));
+
+        telemetry.addData("  Target lock", gamepad2.a
+                ? (drivetrain.hasPinpoint() ? "ACTIVE (hold A)" : "A held (Pinpoint unavailable)")
+                : "off (hold A)");
+        telemetry.addData("  Target alliance", TARGET_LOCK_ALLIANCE.name());
+        Mark2TargetLock.FieldPoint target = targetLock.getGoal(TARGET_LOCK_ALLIANCE);
+        telemetry.addData("  Target XY (in)", String.format(Locale.US, "(%.1f, %.1f)",
+                target.xInches, target.yInches));
+        if (gamepad2.a && drivetrain.hasPinpoint()) {
+            org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
+            telemetry.addData("  Lock turret deg", String.format(Locale.US, "%.1f",
+                    targetLock.computeDesiredTurretDeg(pose, TARGET_LOCK_ALLIANCE)));
+        }
+
         telemetry.addData("  Hood pos", String.format(Locale.US, "%.3f",
                 nanToZero(launcher.getHoodPosition())));
         telemetry.addData("  Feeder pos", String.format(Locale.US, "%.3f",
