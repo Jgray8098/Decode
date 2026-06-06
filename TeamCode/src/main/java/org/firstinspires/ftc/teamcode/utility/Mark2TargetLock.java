@@ -19,19 +19,19 @@ public class Mark2TargetLock {
     // Tuning constants — edit these before each match as needed.
     // -------------------------------------------------------------------------
     /** Field X coordinate of the red alliance goal (inches). */
-    public static final double RED_GOAL_X_IN   = 72.0;
+    public static final double RED_GOAL_X_IN   = 130.5;
     /** Field Y coordinate of the red alliance goal (inches). */
-    public static final double RED_GOAL_Y_IN   = -36.0;
+    public static final double RED_GOAL_Y_IN   = 134.8;
 
     /** Field X coordinate of the blue alliance goal (inches). */
-    public static final double BLUE_GOAL_X_IN  = 72.0;
+    public static final double BLUE_GOAL_X_IN  = 11.57;
     /** Field Y coordinate of the blue alliance goal (inches). */
-    public static final double BLUE_GOAL_Y_IN  = 36.0;
+    public static final double BLUE_GOAL_Y_IN  = 134.8;
 
-    /** Leftward mechanical turret limit, degrees relative to robot forward. */
-    public static final double TURRET_MIN_DEG  = -120.0;
-    /** Rightward mechanical turret limit, degrees relative to robot forward. */
-    public static final double TURRET_MAX_DEG  =  120.0;
+    /** Leftward mechanical turret limit, degrees relative to robot reverse. */
+    public static final double TURRET_MIN_DEG  = -135.0;
+    /** Rightward mechanical turret limit, degrees relative to robot reverse. */
+    public static final double TURRET_MAX_DEG  =  135.0;
 
     /** Aim servo position corresponding to the leftmost turret angle. */
     public static final double AIM_SERVO_MIN   = Mark2Launcher.AIM_MIN_POS;
@@ -87,8 +87,10 @@ public class Mark2TargetLock {
         double robotY          = robotPose.getY(DistanceUnit.INCH);
         double robotHeadingRad = robotPose.getHeading(AngleUnit.RADIANS);
 
-        double fieldHeadingRad   = Math.atan2(goal.yInches - robotY, goal.xInches - robotX);
-        double relativeTurretRad = normalizeRad(fieldHeadingRad - robotHeadingRad);
+        double fieldHeadingRad = Math.atan2(goal.yInches - robotY, goal.xInches - robotX);
+        // Pinpoint reports the robot front; add 180 deg because turret zero points out the back.
+        double robotReverseHeadingRad = robotHeadingRad + Math.PI;
+        double relativeTurretRad = normalizeRad(fieldHeadingRad - robotReverseHeadingRad);
 
         return clamp(Math.toDegrees(relativeTurretRad), config.turretMinDeg, config.turretMaxDeg);
     }

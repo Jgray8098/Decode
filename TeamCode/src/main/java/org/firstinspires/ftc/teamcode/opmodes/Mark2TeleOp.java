@@ -18,6 +18,7 @@ import java.util.Locale;
  *   Right stick Y / X - translate
  *   Left stick X      - rotate
  *   Left trigger      - snail mode
+ *   Left bumper       - reset Pinpoint pose to selected alliance start
  *   Right bumper      - toggle alliance flip
  *   Right trigger     - toggle field-centric driving (resets heading reference on enable)
  *   Back button       - re-zero field-centric heading reference
@@ -29,7 +30,7 @@ import java.util.Locale;
  *   Y press/hold      - return feeder gate to idle and run intake forward
  *   X hold            - intake reverse, only when launch sequence is idle
  *   Left stick X      - aim servo position
- *   A hold            - lock turret on alliance goal target
+ *   A press           - toggle turret lock on alliance goal target
  */
 @TeleOp(name = "Mark2 TeleOp", group = "Mark2")
 public class Mark2TeleOp extends OpMode {
@@ -40,14 +41,28 @@ public class Mark2TeleOp extends OpMode {
     private Mark2ManualLauncherController manualLauncher;
     private Mark2TargetLock targetLock;
 
-    // Change Mark2TargetLock.DEFAULT_ALLIANCE before a match if your alliance changes.
-    private static final Mark2TargetLock.Alliance TARGET_LOCK_ALLIANCE = Mark2TargetLock.DEFAULT_ALLIANCE;
+    // Change Mark2TargetLock.DEFAULT_ALLIANCE before a match to choose the initial alliance.
+    private static final Mark2TargetLock.Alliance INITIAL_ALLIANCE = Mark2TargetLock.DEFAULT_ALLIANCE;
+
+    private static final double BLUE_START_X_IN = 14.1;
+    private static final double BLUE_START_Y_IN = 76.46;
+    private static final double BLUE_START_HEADING_DEG = 180.0;
+
+    private static final double RED_START_X_IN = 127.8;
+    private static final double RED_START_Y_IN = 76.46;
+    private static final double RED_START_HEADING_DEG = 0.0;
 
     private long lastNs;
 
     private boolean prevRB1 = false;
+    private boolean prevLB1 = false;
     private boolean prevRT1 = false;   // GP1 right trigger — field-centric toggle
     private boolean prevBack1 = false; // GP1 back button  — re-zero field-centric heading
+
+    private String lastPoseReset = "not reset";
+    private Mark2TargetLock.Alliance selectedAlliance = INITIAL_ALLIANCE;
+    private boolean prevA2 = false;
+    private boolean targetLockEnabled = false;
 
     @Override
     public void init() {
@@ -58,15 +73,20 @@ public class Mark2TeleOp extends OpMode {
 
         targetLock = new Mark2TargetLock();
 
+        if (selectedAlliance == Mark2TargetLock.Alliance.BLUE) {
+            drivetrain.toggleAllianceFlip();
+        }
+
         launcher.resetFeeder();
 
         lastNs = System.nanoTime();
 
         telemetry.addLine("Mark2 TeleOp - Initialized");
         telemetry.addLine("GP1: Drive   GP2: Intake + Launcher");
+        telemetry.addLine("GP1 LB=Reset pose to alliance start");
         telemetry.addLine("GP2 DUp=Close toggle DDn=Far toggle");
         telemetry.addLine("GP2 B=Launch Y=Intake+GateIdle X=Reverse");
-        telemetry.addLine("GP2 A(hold)=Turret target lock");
+        telemetry.addLine("GP2 A=Toggle turret target lock");
         telemetry.update();
     }
 
@@ -79,8 +99,15 @@ public class Mark2TeleOp extends OpMode {
         boolean rb1 = gamepad1.right_bumper;
         if (rb1 && !prevRB1) {
             drivetrain.toggleAllianceFlip();
+            selectedAlliance = oppositeAlliance(selectedAlliance);
         }
         prevRB1 = rb1;
+
+        boolean lb1 = gamepad1.left_bumper;
+        if (lb1 && !prevLB1) {
+            resetPoseToSelectedAllianceStart();
+        }
+        prevLB1 = lb1;
 
         // GP1 right trigger (rising edge) — toggle field-centric driving
         boolean rt1 = gamepad1.right_trigger > 0.5;
@@ -100,10 +127,15 @@ public class Mark2TeleOp extends OpMode {
 
         manualLauncher.update(gamepad2, dt);
 
-        // Hold-only safety behavior: lock is active only while GP2 A is pressed.
-        if (gamepad2.a && drivetrain.hasPinpoint()) {
+        boolean a2 = gamepad2.a;
+        if (a2 && !prevA2) {
+            targetLockEnabled = !targetLockEnabled;
+        }
+        prevA2 = a2;
+
+        if (targetLockEnabled && drivetrain.hasPinpoint()) {
             org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
-            targetLock.lockToGoal(launcher, pose, TARGET_LOCK_ALLIANCE);
+            targetLock.lockToGoal(launcher, pose, selectedAlliance);
         }
 
         showTelemetry();
@@ -111,8 +143,9 @@ public class Mark2TeleOp extends OpMode {
 
     private void showTelemetry() {
         telemetry.addLine("-- Driver --------------------------");
-        telemetry.addData("  Alliance flip", drivetrain.isAllianceFlipped()
-                ? "FLIPPED (RB to restore)" : "normal  (RB to flip)");
+        telemetry.addData("  Alliance", String.format(Locale.US, "%s (RB to %s)",
+                selectedAlliance.name(), oppositeAlliance(selectedAlliance).name()));
+        telemetry.addData("  Pose reset", lastPoseReset);
         telemetry.addData("  Snail mode", gamepad1.left_trigger > 0 ? "ACTIVE (60%)" : "off");
         telemetry.addData("  Field-centric", drivetrain.hasPinpoint()
                 ? (drivetrain.isFieldCentric() ? "ON  (RT=disable, Back=re-zero)" : "off (RT to enable)")
@@ -149,17 +182,17 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("  Aim pos", String.format(Locale.US, "%.3f",
                 launcher.getAimPosition()));
 
-        telemetry.addData("  Target lock", gamepad2.a
-                ? (drivetrain.hasPinpoint() ? "ACTIVE (hold A)" : "A held (Pinpoint unavailable)")
-                : "off (hold A)");
-        telemetry.addData("  Target alliance", TARGET_LOCK_ALLIANCE.name());
-        Mark2TargetLock.FieldPoint target = targetLock.getGoal(TARGET_LOCK_ALLIANCE);
+        telemetry.addData("  Target lock", targetLockEnabled
+                ? (drivetrain.hasPinpoint() ? "ON (A to off)" : "ON (Pinpoint unavailable)")
+                : "off (A to on)");
+        telemetry.addData("  Target alliance", selectedAlliance.name());
+        Mark2TargetLock.FieldPoint target = targetLock.getGoal(selectedAlliance);
         telemetry.addData("  Target XY (in)", String.format(Locale.US, "(%.1f, %.1f)",
                 target.xInches, target.yInches));
-        if (gamepad2.a && drivetrain.hasPinpoint()) {
+        if (targetLockEnabled && drivetrain.hasPinpoint()) {
             org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
             telemetry.addData("  Lock turret deg", String.format(Locale.US, "%.1f",
-                    targetLock.computeDesiredTurretDeg(pose, TARGET_LOCK_ALLIANCE)));
+                    targetLock.computeDesiredTurretDeg(pose, selectedAlliance)));
         }
 
         telemetry.addData("  Hood pos", String.format(Locale.US, "%.3f",
@@ -173,6 +206,36 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("  Running", intakeStatus());
 
         telemetry.update();
+    }
+
+    private void resetPoseToSelectedAllianceStart() {
+        double xInches;
+        double yInches;
+        double headingDegrees;
+
+        if (selectedAlliance == Mark2TargetLock.Alliance.BLUE) {
+            xInches = BLUE_START_X_IN;
+            yInches = BLUE_START_Y_IN;
+            headingDegrees = BLUE_START_HEADING_DEG;
+        } else {
+            xInches = RED_START_X_IN;
+            yInches = RED_START_Y_IN;
+            headingDegrees = RED_START_HEADING_DEG;
+        }
+
+        drivetrain.setStartingPose(xInches, yInches, headingDegrees);
+        drivetrain.resetFieldCentricHeading();
+
+        lastPoseReset = drivetrain.hasPinpoint()
+                ? String.format(Locale.US, "%s %.1f, %.2f, %.0f deg",
+                        selectedAlliance.name(), xInches, yInches, headingDegrees)
+                : "Pinpoint unavailable";
+    }
+
+    private static Mark2TargetLock.Alliance oppositeAlliance(Mark2TargetLock.Alliance alliance) {
+        return alliance == Mark2TargetLock.Alliance.BLUE
+                ? Mark2TargetLock.Alliance.RED
+                : Mark2TargetLock.Alliance.BLUE;
     }
 
     private static double nanToZero(double v) {
