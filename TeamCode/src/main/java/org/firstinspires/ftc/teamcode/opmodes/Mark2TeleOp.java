@@ -3,6 +3,8 @@ package org.firstinspires.ftc.teamcode.opmodes;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.teamcode.control.Mark2AutoLauncherController;
 import org.firstinspires.ftc.teamcode.control.Mark2ManualLauncherController;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
@@ -29,8 +31,9 @@ import java.util.Locale;
  *   B press           - run launch-feed sequence, only if flywheel is on
  *   Y press/hold      - return feeder gate to idle and run intake forward
  *   X hold            - intake reverse, only when launch sequence is idle
- *   Left stick X      - aim servo position
- *   A press           - toggle turret lock on alliance goal target
+ *   Left bumper       - toggle automatic RPM/hood from Pinpoint distance
+ *   Right bumper      - toggle turret lock on alliance goal target
+ *   Left stick X      - aim servo position, only when turret lock is off
  */
 @TeleOp(name = "Mark2 TeleOp", group = "Mark2")
 public class Mark2TeleOp extends OpMode {
@@ -39,6 +42,7 @@ public class Mark2TeleOp extends OpMode {
     private Mark2Intake intake;
     private Mark2Launcher launcher;
     private Mark2ManualLauncherController manualLauncher;
+    private Mark2AutoLauncherController autoLauncher;
     private Mark2TargetLock targetLock;
 
     // Change Mark2TargetLock.DEFAULT_ALLIANCE before a match to choose the initial alliance.
@@ -61,8 +65,10 @@ public class Mark2TeleOp extends OpMode {
 
     private String lastPoseReset = "not reset";
     private Mark2TargetLock.Alliance selectedAlliance = INITIAL_ALLIANCE;
-    private boolean prevA2 = false;
+    private boolean prevRB2 = false;
+    private boolean prevLB2 = false;
     private boolean targetLockEnabled = false;
+    private boolean autoLauncherEnabled = false;
 
     @Override
     public void init() {
@@ -70,6 +76,7 @@ public class Mark2TeleOp extends OpMode {
         intake = new Mark2Intake(hardwareMap);
         launcher = new Mark2Launcher(hardwareMap);
         manualLauncher = new Mark2ManualLauncherController(launcher, intake);
+        autoLauncher = new Mark2AutoLauncherController(launcher);
 
         targetLock = new Mark2TargetLock();
 
@@ -86,7 +93,7 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addLine("GP1 LB=Reset pose to alliance start");
         telemetry.addLine("GP2 DUp=Close toggle DDn=Far toggle");
         telemetry.addLine("GP2 B=Launch Y=Intake+GateIdle X=Reverse");
-        telemetry.addLine("GP2 A=Toggle turret target lock");
+        telemetry.addLine("GP2 LB=Auto RPM/hood  RB=Turret lock");
         telemetry.update();
     }
 
@@ -125,13 +132,28 @@ public class Mark2TeleOp extends OpMode {
 
         drivetrain.driveSafe(gamepad1);
 
-        manualLauncher.update(gamepad2, dt);
+        boolean lb2 = gamepad2.left_bumper;
+        if (lb2 && !prevLB2) {
+            setAutoLauncherEnabled(!autoLauncherEnabled);
+        }
+        prevLB2 = lb2;
 
-        boolean a2 = gamepad2.a;
-        if (a2 && !prevA2) {
+        boolean rb2 = gamepad2.right_bumper;
+        if (rb2 && !prevRB2) {
             targetLockEnabled = !targetLockEnabled;
         }
-        prevA2 = a2;
+        prevRB2 = rb2;
+
+        boolean useAutoLauncher = autoLauncherEnabled && drivetrain.hasPinpoint();
+        boolean manualAimEnabled = !targetLockEnabled;
+        if (useAutoLauncher) {
+            Pose2D pose = drivetrain.getPose();
+            autoLauncher.updateForPose(pose, selectedAlliance, dt);
+            manualLauncher.updateWithExternalLauncherSetpoint(
+                    gamepad2, dt, autoLauncher.isAtSpeed(), manualAimEnabled);
+        } else {
+            manualLauncher.update(gamepad2, dt, manualAimEnabled);
+        }
 
         if (targetLockEnabled && drivetrain.hasPinpoint()) {
             org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
@@ -141,7 +163,20 @@ public class Mark2TeleOp extends OpMode {
         showTelemetry();
     }
 
+    @Override
+    public void stop() {
+        setAutoLauncherEnabled(false);
+        if (manualLauncher != null) {
+            manualLauncher.stop();
+        }
+        if (intake != null) {
+            intake.Stop();
+        }
+    }
+
     private void showTelemetry() {
+        boolean useAutoLauncher = autoLauncherEnabled && drivetrain.hasPinpoint();
+
         telemetry.addLine("-- Driver --------------------------");
         telemetry.addData("  Alliance", String.format(Locale.US, "%s (RB to %s)",
                 selectedAlliance.name(), oppositeAlliance(selectedAlliance).name()));
@@ -163,16 +198,25 @@ public class Mark2TeleOp extends OpMode {
         }
 
         telemetry.addLine("-- Launcher ------------------------");
-        telemetry.addData("  Mode", "MANUAL");
-        telemetry.addData("  Flywheel", manualLauncher.isFlywheelRunning() ? "ON" : "off");
+        telemetry.addData("  Mode", launcherModeText(useAutoLauncher));
+        telemetry.addData("  Flywheel", launcher.getTargetRpm() > 0.0 ? "ON" : "off");
         telemetry.addData("  Launch seq", manualLauncher.getLaunchSequenceStateName());
-        telemetry.addData("  Selected zone", manualLauncher.getSelectedZoneName());
-        telemetry.addData("  Zone RPM", String.format(Locale.US, "%.0f",
-                manualLauncher.getSelectedZoneRpm()));
-        telemetry.addData("  Zone hood", String.format(Locale.US, "%.3f",
-                manualLauncher.getSelectedZoneHoodPosition()));
+        if (useAutoLauncher) {
+            telemetry.addData("  Auto distance", String.format(Locale.US, "%.1f in",
+                    autoLauncher.getLastDistanceInches()));
+            telemetry.addData("  Auto RPM", String.format(Locale.US, "%.0f",
+                    autoLauncher.getTargetRpm()));
+            telemetry.addData("  Auto hood", String.format(Locale.US, "%.3f",
+                    autoLauncher.getTargetHoodPosition()));
+        } else {
+            telemetry.addData("  Selected zone", manualLauncher.getSelectedZoneName());
+            telemetry.addData("  Zone RPM", String.format(Locale.US, "%.0f",
+                    manualLauncher.getSelectedZoneRpm()));
+            telemetry.addData("  Zone hood", String.format(Locale.US, "%.3f",
+                    manualLauncher.getSelectedZoneHoodPosition()));
+        }
         telemetry.addData("  Target RPM", String.format(Locale.US, "%.0f",
-                manualLauncher.getTargetRpmCommand()));
+                launcher.getTargetRpm()));
         telemetry.addData("  Measured RPM", String.format(Locale.US, "%.0f",
                 launcher.getMeasuredRpm()));
         telemetry.addData("  Motor RPM", String.format(Locale.US, "%.0f / %.0f",
@@ -181,10 +225,11 @@ public class Mark2TeleOp extends OpMode {
                 launcher.getFlywheelPowerOne(), launcher.getFlywheelPowerTwo()));
         telemetry.addData("  Aim pos", String.format(Locale.US, "%.3f",
                 launcher.getAimPosition()));
+        telemetry.addData("  Manual aim", targetLockEnabled ? "locked out" : "GP2 left stick");
 
         telemetry.addData("  Target lock", targetLockEnabled
-                ? (drivetrain.hasPinpoint() ? "ON (A to off)" : "ON (Pinpoint unavailable)")
-                : "off (A to on)");
+                ? (drivetrain.hasPinpoint() ? "ON (RB to off)" : "ON (Pinpoint unavailable)")
+                : "off (RB to on)");
         telemetry.addData("  Target alliance", selectedAlliance.name());
         Mark2TargetLock.FieldPoint target = targetLock.getGoal(selectedAlliance);
         telemetry.addData("  Target XY (in)", String.format(Locale.US, "(%.1f, %.1f)",
@@ -230,6 +275,29 @@ public class Mark2TeleOp extends OpMode {
                 ? String.format(Locale.US, "%s %.1f, %.2f, %.0f deg",
                         selectedAlliance.name(), xInches, yInches, headingDegrees)
                 : "Pinpoint unavailable";
+    }
+
+    private void setAutoLauncherEnabled(boolean enabled) {
+        if (enabled == autoLauncherEnabled) {
+            return;
+        }
+
+        autoLauncherEnabled = enabled;
+        if (enabled) {
+            manualLauncher.stop();
+        } else if (autoLauncher != null) {
+            autoLauncher.stop();
+        }
+    }
+
+    private String launcherModeText(boolean useAutoLauncher) {
+        if (useAutoLauncher) {
+            return "AUTO distance (LB to manual)";
+        }
+        if (autoLauncherEnabled) {
+            return "AUTO requested, no Pinpoint";
+        }
+        return "MANUAL presets (LB to auto)";
     }
 
     private static Mark2TargetLock.Alliance oppositeAlliance(Mark2TargetLock.Alliance alliance) {
