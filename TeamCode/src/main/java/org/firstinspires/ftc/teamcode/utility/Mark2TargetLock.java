@@ -19,14 +19,14 @@ public class Mark2TargetLock {
     // Tuning constants — edit these before each match as needed.
     // -------------------------------------------------------------------------
     /** Field X coordinate of the red alliance goal (inches). */
-    public static final double RED_GOAL_X_IN   = 130.5;
+    public static final double RED_GOAL_X_IN   = 132;
     /** Field Y coordinate of the red alliance goal (inches). */
-    public static final double RED_GOAL_Y_IN   = 134.8;
+    public static final double RED_GOAL_Y_IN   = 132;
 
     /** Field X coordinate of the blue alliance goal (inches). */
-    public static final double BLUE_GOAL_X_IN  = 11.57;
+    public static final double BLUE_GOAL_X_IN  = 10;
     /** Field Y coordinate of the blue alliance goal (inches). */
-    public static final double BLUE_GOAL_Y_IN  = 134.8;
+    public static final double BLUE_GOAL_Y_IN  = 132;
 
     /** Leftward mechanical turret limit, degrees relative to robot reverse. */
     public static final double TURRET_MIN_DEG  = -135.0;
