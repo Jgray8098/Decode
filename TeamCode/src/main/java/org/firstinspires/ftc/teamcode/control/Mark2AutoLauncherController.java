@@ -36,19 +36,20 @@ public class Mark2AutoLauncherController {
     private final InterpolatingTreeMap setpointMap = new InterpolatingTreeMap();
 
     private double targetRpm = 0.0;
-    private double targetHoodPosition = 0.0;
+    private double targetHoodPosition = Mark2Launcher.HOOD_SERVO_RESET_POSITION;
     private double lastDistanceInches = Double.NaN;
 
     public Mark2AutoLauncherController(Mark2Launcher launcher) {
         this.launcher = launcher;
 
         // Distance (inches) -> LaunchSetpoint (rpm, hoodPosition). Tune on robot.
-        setpointMap.put(24.0,  new LaunchSetpoint(2000.0, 0.10));
-        setpointMap.put(48.0,  new LaunchSetpoint(2500.0, 0.20));
-        setpointMap.put(72.0,  new LaunchSetpoint(3000.0, 0.30));
-        setpointMap.put(96.0,  new LaunchSetpoint(3800.0, 0.42));
-        setpointMap.put(120.0, new LaunchSetpoint(4500.0, 0.55));
-        setpointMap.put(144.0, new LaunchSetpoint(5400.0, 0.70));
+        setpointMap.put(24.0,  new LaunchSetpoint(2000.0, 0.20));
+        setpointMap.put(36.0,  new LaunchSetpoint(2300.0, 0.50));
+        setpointMap.put(48.0,  new LaunchSetpoint(2500.0, 0.70));
+        setpointMap.put(72.0,  new LaunchSetpoint(2800.0, 0.80));
+        setpointMap.put(96.0,  new LaunchSetpoint(2950.0, 0.80));
+        setpointMap.put(120.0, new LaunchSetpoint(3000.0, 0.80));
+        setpointMap.put(144.0, new LaunchSetpoint(3200.0, 0.80));
     }
 
     public LaunchSetpoint updateForPose(
@@ -68,7 +69,7 @@ public class Mark2AutoLauncherController {
     public LaunchSetpoint applySetpointForDistance(double distanceFromTargetInches) {
         LaunchSetpoint setpoint = setpointMap.get(distanceFromTargetInches);
         targetRpm = setpoint.rpm;
-        targetHoodPosition = setpoint.hoodPosition;
+        targetHoodPosition = Mark2Launcher.clipHoodPosition(setpoint.hoodPosition);
         lastDistanceInches = distanceFromTargetInches;
 
         launcher.setFlywheelTargetRpm(targetRpm);
@@ -84,7 +85,7 @@ public class Mark2AutoLauncherController {
 
     public void stop() {
         targetRpm = 0.0;
-        targetHoodPosition = 0.0;
+        targetHoodPosition = Mark2Launcher.HOOD_SERVO_RESET_POSITION;
         lastDistanceInches = Double.NaN;
         launcher.stopFlywheels();
     }

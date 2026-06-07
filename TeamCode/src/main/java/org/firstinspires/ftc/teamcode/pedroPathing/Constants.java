@@ -15,6 +15,16 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 public class Constants {
+    public static final String PINPOINT_HARDWARE_MAP_NAME = "pinpoint";
+    public static final double PINPOINT_FORWARD_POD_Y_IN = 5.496;
+    public static final double PINPOINT_STRAFE_POD_X_IN = -0.013;
+    public static final GoBildaPinpointDriver.GoBildaOdometryPods PINPOINT_ENCODER_RESOLUTION =
+            GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD;
+    public static final GoBildaPinpointDriver.EncoderDirection PINPOINT_FORWARD_ENCODER_DIRECTION =
+            GoBildaPinpointDriver.EncoderDirection.REVERSED;
+    public static final GoBildaPinpointDriver.EncoderDirection PINPOINT_STRAFE_ENCODER_DIRECTION =
+            GoBildaPinpointDriver.EncoderDirection.FORWARD;
+
     public static FollowerConstants followerConstants = new FollowerConstants()
             .mass(11.113)
             .forwardZeroPowerAcceleration(-29.34215361)
@@ -50,11 +60,11 @@ public class Constants {
     }
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(5.496)
-            .strafePodX(-0.013)
+            .forwardPodY(PINPOINT_FORWARD_POD_Y_IN)
+            .strafePodX(PINPOINT_STRAFE_POD_X_IN)
             .distanceUnit(DistanceUnit.INCH)
-            .hardwareMapName("pinpoint")
-            .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
-            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+            .hardwareMapName(PINPOINT_HARDWARE_MAP_NAME)
+            .encoderResolution(PINPOINT_ENCODER_RESOLUTION)
+            .forwardEncoderDirection(PINPOINT_FORWARD_ENCODER_DIRECTION)
+            .strafeEncoderDirection(PINPOINT_STRAFE_ENCODER_DIRECTION);
 }

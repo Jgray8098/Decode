@@ -21,7 +21,7 @@ import java.util.Locale;
  *   Left stick X      - rotate
  *   Left trigger      - snail mode
  *   Left bumper       - reset Pinpoint pose to selected alliance start
- *   Right bumper      - toggle alliance flip
+ *   Right bumper      - toggle selected alliance
  *   Right trigger     - toggle field-centric driving (resets heading reference on enable)
  *   Back button       - re-zero field-centric heading reference
  *
@@ -80,10 +80,6 @@ public class Mark2TeleOp extends OpMode {
 
         targetLock = new Mark2TargetLock();
 
-        if (selectedAlliance == Mark2TargetLock.Alliance.BLUE) {
-            drivetrain.toggleAllianceFlip();
-        }
-
         launcher.resetFeeder();
 
         lastNs = System.nanoTime();
@@ -105,7 +101,6 @@ public class Mark2TeleOp extends OpMode {
 
         boolean rb1 = gamepad1.right_bumper;
         if (rb1 && !prevRB1) {
-            drivetrain.toggleAllianceFlip();
             selectedAlliance = oppositeAlliance(selectedAlliance);
         }
         prevRB1 = rb1;

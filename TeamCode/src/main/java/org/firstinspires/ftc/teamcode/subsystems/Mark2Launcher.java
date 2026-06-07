@@ -29,8 +29,12 @@ public class Mark2Launcher {
     // -------------------------------------------------------------------------
     // Servo positions  (tune!)
     // -------------------------------------------------------------------------
+    /** Minimum safe hood servo position for the current hood design. */
+    public static final double HOOD_SERVO_MIN_POSITION    = 0.16;
+    /** Maximum safe hood servo position for the current hood design. */
+    public static final double HOOD_SERVO_MAX_POSITION    = 0.80;
     /** Hood servo resting position when launcher is idle. */
-    public static final double HOOD_SERVO_RESET_POSITION  = 0.0;
+    public static final double HOOD_SERVO_RESET_POSITION  = 0.20;
     /** Gate servos "push" position — feeds ball into launch mechanism. */
     public static final double FEEDER_SERVO_FEED_POSITION = 0.25;
     /** Gate servos retracted / resting position — default when not firing. */
@@ -223,7 +227,11 @@ public class Mark2Launcher {
 
     public void setHoodPosition(double position) {
         if (!hasServos) return;
-        hoodPositionServo.setPosition(clamp(position, 0.0, 1.0));
+        hoodPositionServo.setPosition(clipHoodPosition(position));
+    }
+
+    public static double clipHoodPosition(double position) {
+        return clamp(position, HOOD_SERVO_MIN_POSITION, HOOD_SERVO_MAX_POSITION);
     }
 
     public void setFeederPosition(double position) {
