@@ -5,15 +5,22 @@
     Reads a Pedro Pathing .pp project file and generates a Java code fragment
     containing named Pose constants and a Paths inner class with PathChain builder
     calls, ready to paste into an opmode.
+
+    When a bare filename (no path separator) is given and the file does not exist
+    in the current directory, the script automatically searches the
+    Scripts\InputAndOutput folder so you can run:
+        .\Convert-PedroToJavaPoints.ps1 Mark2BlueInitialAuto.pp
+    from the Scripts\ directory without typing the full path.
 .PARAMETER InputFiles
-    One or more .pp input files.
+    One or more .pp input files.  Bare filenames are resolved against
+    Scripts\InputAndOutput if not found in the working directory.
 .PARAMETER OutDir
     Directory to write output .javafragment files.
     Defaults to Scripts\InputAndOutput.
 .PARAMETER OutputFile
     Explicit output path (only valid when exactly one InputFile is given).
 .EXAMPLE
-    .\Convert-PedroToJavaPoints.ps1 pedro_paths_blue_close_auto_high.pp
+    .\Convert-PedroToJavaPoints.ps1 Mark2BlueInitialAuto.pp
 .EXAMPLE
     .\Convert-PedroToJavaPoints.ps1 .\InputAndOutput\*.pp -OutDir .\InputAndOutput
 #>
@@ -366,8 +373,16 @@ $resolvedOutDir = if ($OutDir) {
 [System.IO.Directory]::CreateDirectory($resolvedOutDir) | Out-Null
 
 foreach ($file in $InputFiles) {
-    # Support glob expansion
+    # First try the path exactly as given (relative or absolute).
     $resolved = Get-Item -Path $file -ErrorAction SilentlyContinue
+
+    # If not found and the input looks like a bare filename (no directory separator),
+    # try Scripts\InputAndOutput automatically.
+    if (-not $resolved -and $file -notmatch '[/\\]') {
+        $fallback = Join-Path $script:DefaultOutputDir $file
+        $resolved = Get-Item -Path $fallback -ErrorAction SilentlyContinue
+    }
+
     if (-not $resolved) { $resolved = Get-Item -LiteralPath $file }
     foreach ($item in $resolved) {
         $outFile = if ($OutputFile) {

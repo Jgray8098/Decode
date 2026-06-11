@@ -5,13 +5,20 @@
     Parses a Java opmode file that uses the Pedro Pathing library, extracts all
     Pose definitions and pathBuilder chains (or Mark2-style double[] navigate calls),
     and writes a Pedro Pathing .pp project file ready to open in the Pedro visualizer.
+
+    When a bare filename (no path separator) is given and the file does not exist
+    in the current directory, the script automatically searches the TeamCode opmodes
+    folder so you can run:
+        .\Convert-JavaToPedroPp.ps1 Mark2BlueInitialAuto.java
+    from the Scripts\ directory without typing the full path.
 .PARAMETER JavaFiles
-    One or more input Java opmode .java files.
+    One or more input Java opmode .java files.  Bare filenames are resolved
+    against the TeamCode opmodes folder if not found in the working directory.
 .PARAMETER OutDir
     Directory to write the generated .pp files.
     Defaults to Scripts\InputAndOutput.
 .EXAMPLE
-    .\Convert-JavaToPedroPp.ps1 BlueCloseAutoHigh.java
+    .\Convert-JavaToPedroPp.ps1 Mark2BlueInitialAuto.java
 .EXAMPLE
     .\Convert-JavaToPedroPp.ps1 .\opmodes\*.java -OutDir .\Scripts\InputAndOutput
 #>
@@ -28,6 +35,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:DefaultOutputDir = Join-Path $PSScriptRoot 'InputAndOutput'
+
+# Fallback search location for bare .java filenames (no directory separator in input).
+$script:DefaultJavaDir = Join-Path $PSScriptRoot '..\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\opmodes'
 
 $script:PP_COLORS = @(
     '#ffc516', '#5B9C9A', '#857B75', '#C9DB67',
@@ -520,7 +530,16 @@ $resolvedOutDir = if ($OutDir) {
 [System.IO.Directory]::CreateDirectory($resolvedOutDir) | Out-Null
 
 foreach ($filePattern in $JavaFiles) {
+    # First try the path exactly as given (relative or absolute).
     $items = Get-Item -Path $filePattern -ErrorAction SilentlyContinue
+
+    # If not found and the input looks like a bare filename (no directory separator),
+    # try the TeamCode opmodes folder automatically.
+    if (-not $items -and $filePattern -notmatch '[/\\]') {
+        $fallback = Join-Path $script:DefaultJavaDir $filePattern
+        $items = Get-Item -Path $fallback -ErrorAction SilentlyContinue
+    }
+
     if (-not $items) { $items = Get-Item -LiteralPath $filePattern }
     foreach ($item in $items) {
         try {
