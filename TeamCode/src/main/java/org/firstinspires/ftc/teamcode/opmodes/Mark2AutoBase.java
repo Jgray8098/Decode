@@ -7,13 +7,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
+import org.firstinspires.ftc.teamcode.control.Mark2AutoLauncherController;
 import org.firstinspires.ftc.teamcode.control.Mark2LaunchSequence;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames;
-import org.firstinspires.ftc.teamcode.utility.InterpolatingTreeMap;
-import org.firstinspires.ftc.teamcode.utility.LaunchSetpoint;
 
 /**
  * Abstract base for all Mark2 autonomous OpModes.
@@ -34,8 +33,6 @@ public abstract class Mark2AutoBase extends LinearOpMode {
     // ── Tuning ────────────────────────────────────────────────────────────────
     /** Maximum time to wait for a shot to complete before continuing. */
     protected static final double SHOOT_TIMEOUT_S      = 6.0;
-    /** Fraction of target RPM that counts as ready to feed. */
-    protected static final double RPM_READY_FRACTION   = 0.90;
     /** Default time to run intake in reverse after picking up game elements. */
     protected static final double OUTTAKE_REVERSE_S    = 1.0;
 
@@ -44,6 +41,12 @@ public abstract class Mark2AutoBase extends LinearOpMode {
     protected Mark2Intake mark2Intake;
     protected Mark2Launcher mark2Launcher;
     protected Mark2LaunchSequence mark2LaunchSequence;
+    /**
+     * Shared launch setpoint controller — same table used by TeleOp's auto-aim mode.
+     * Provides distance → (RPM, hood position) interpolation via
+     * {@link Mark2AutoLauncherController#applySetpointForDistance}.
+     */
+    protected Mark2AutoLauncherController mark2AutoLauncher;
 
     // ── Internal state ────────────────────────────────────────────────────────
     /** Label shown in telemetry while the robot works through its path. */
@@ -55,8 +58,6 @@ public abstract class Mark2AutoBase extends LinearOpMode {
     /** Remaining seconds of non-blocking intake reverse (0 = not active). */
     private double reverseRemainingS = 0.0;
 
-    private InterpolatingTreeMap launchSetpointMap;
-    private double launchTargetRpm = 0.0;
 
     // =========================================================================
     // LinearOpMode entry point
@@ -81,6 +82,9 @@ public abstract class Mark2AutoBase extends LinearOpMode {
         }
         if (mark2LaunchSequence != null) {
             mark2LaunchSequence.cancel();
+        }
+        if (mark2AutoLauncher != null) {
+            mark2AutoLauncher.stop();
         }
         if (mark2Launcher != null) {
             mark2Launcher.stop();
@@ -127,7 +131,7 @@ public abstract class Mark2AutoBase extends LinearOpMode {
         mark2Intake = new Mark2Intake(hardwareMap);
         mark2Launcher = new Mark2Launcher(hardwareMap);
         mark2LaunchSequence = new Mark2LaunchSequence(mark2Launcher, mark2Intake);
-        launchSetpointMap = createLaunchSetpointMap();
+        mark2AutoLauncher = new Mark2AutoLauncherController(mark2Launcher);
     }
 
     // =========================================================================
@@ -184,12 +188,9 @@ public abstract class Mark2AutoBase extends LinearOpMode {
      */
     protected void shootFrom(double distanceInches) {
         currentPhase = String.format("Shoot (%.0f in)", distanceInches);
-        LaunchSetpoint setpoint = launchSetpointMap.get(distanceInches);
-        launchTargetRpm = setpoint.rpm;
 
         mark2LaunchSequence.cancel();
-        mark2Launcher.setFlywheelTargetRpm(launchTargetRpm);
-        mark2Launcher.setHoodPosition(setpoint.hoodPosition);
+        mark2AutoLauncher.applySetpointForDistance(distanceInches);
         mark2Launcher.resetFeeder();
 
         double elapsed = 0.0;
@@ -200,17 +201,16 @@ public abstract class Mark2AutoBase extends LinearOpMode {
             double dt = nextDt();
             elapsed += dt;
             mark2Launcher.updateMeasuredRpm(dt);
-            if (!feedingStarted
-                    && mark2Launcher.getMeasuredRpm() >= launchTargetRpm * RPM_READY_FRACTION) {
-                feedingStarted = mark2LaunchSequence.startIfFlywheelRunning(launchTargetRpm > 0.0);
+            if (!feedingStarted && mark2AutoLauncher.isAtSpeed()) {
+                feedingStarted = mark2LaunchSequence.startIfFlywheelRunning(
+                        mark2AutoLauncher.getTargetRpm() > 0.0);
             }
             mark2LaunchSequence.update(dt);
             postTelemetry();
         }
 
         mark2LaunchSequence.cancel();
-        mark2Launcher.stop();
-        launchTargetRpm = 0.0;
+        mark2AutoLauncher.stop();
     }
 
     // =========================================================================
@@ -240,15 +240,8 @@ public abstract class Mark2AutoBase extends LinearOpMode {
         }
     }
 
-    private static InterpolatingTreeMap createLaunchSetpointMap() {
-        InterpolatingTreeMap map = new InterpolatingTreeMap();
-        map.put(24.0,  new LaunchSetpoint(2000.0, 0.10));
-        map.put(48.0,  new LaunchSetpoint(2500.0, 0.20));
-        map.put(72.0,  new LaunchSetpoint(3000.0, 0.30));
-        map.put(96.0,  new LaunchSetpoint(3800.0, 0.42));
-        map.put(120.0, new LaunchSetpoint(4500.0, 0.55));
-        map.put(144.0, new LaunchSetpoint(5400.0, 0.70));
-        return map;
+    private static double clamp(double v, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, v));
     }
 
     // =========================================================================
@@ -275,10 +268,9 @@ public abstract class Mark2AutoBase extends LinearOpMode {
         telemetry.addData("Y (in)",      "%.2f", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading",     "%.1f°", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("Launch seq",  mark2LaunchSequence != null ? mark2LaunchSequence.getState() : "none");
-        telemetry.addData("Target RPM",  "%.0f", launchTargetRpm);
+        telemetry.addData("Target RPM",  "%.0f", mark2AutoLauncher != null ? mark2AutoLauncher.getTargetRpm() : 0.0);
         telemetry.addData("Meas. RPM",   "%.0f", mark2Launcher != null ? mark2Launcher.getMeasuredRpm() : 0.0);
         telemetry.addData("Rev timer",   "%.2f s", reverseRemainingS);
         telemetry.update();
     }
 }
-
