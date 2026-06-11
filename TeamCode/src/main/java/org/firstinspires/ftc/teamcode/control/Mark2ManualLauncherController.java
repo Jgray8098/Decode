@@ -67,21 +67,52 @@ public class Mark2ManualLauncherController {
     }
 
     public void update(Gamepad operator, double dtSec) {
+        update(operator, dtSec, true);
+    }
+
+    public void update(Gamepad operator, double dtSec, boolean manualAimEnabled) {
+        update(operator, dtSec, true, false, manualAimEnabled);
+    }
+
+    public void updateWithExternalLauncherSetpoint(
+            Gamepad operator,
+            double dtSec,
+            boolean externalLauncherReady
+    ) {
+        updateWithExternalLauncherSetpoint(operator, dtSec, externalLauncherReady, true);
+    }
+
+    public void updateWithExternalLauncherSetpoint(
+            Gamepad operator,
+            double dtSec,
+            boolean externalLauncherReady,
+            boolean manualAimEnabled
+    ) {
+        update(operator, dtSec, false, externalLauncherReady, manualAimEnabled);
+    }
+
+    private void update(
+            Gamepad operator,
+            double dtSec,
+            boolean manageLauncherSetpoint,
+            boolean externalLauncherReady,
+            boolean manualAimEnabled
+    ) {
         boolean dpadUp = operator.dpad_up;
         boolean dpadDown = operator.dpad_down;
         boolean b = operator.b;
         boolean y = operator.y;
 
-        if (dpadUp && !prevDpadUp) {
+        if (manageLauncherSetpoint && dpadUp && !prevDpadUp) {
             toggleZone(ShotZone.CLOSE);
         }
 
-        if (dpadDown && !prevDpadDown) {
+        if (manageLauncherSetpoint && dpadDown && !prevDpadDown) {
             toggleZone(ShotZone.FAR);
         }
 
         if (intake != null && b && !prevB) {
-            if (launchSequence.startIfFlywheelRunning(flywheelRunning)) {
+            if (launchSequence.startIfFlywheelRunning(flywheelRunning || externalLauncherReady)) {
                 feederServoPos = Mark2Launcher.FEEDER_SERVO_FEED_POSITION;
             }
         }
@@ -96,9 +127,14 @@ public class Mark2ManualLauncherController {
         prevB = b;
         prevY = y;
 
-        launcher.setFlywheelTargetRpm(targetRpmCommand);
-        launcher.updateMeasuredRpm(dtSec);
-        launcher.setAimFromStick(operator.left_stick_x, dtSec);
+        if (manageLauncherSetpoint) {
+            launcher.setFlywheelTargetRpm(targetRpmCommand);
+            launcher.updateMeasuredRpm(dtSec);
+        }
+
+        if (manualAimEnabled) {
+            launcher.setAimFromStick(operator.left_stick_x, dtSec);
+        }
 
         launchSequence.update(dtSec);
 

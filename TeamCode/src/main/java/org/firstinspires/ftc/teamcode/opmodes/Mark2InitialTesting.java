@@ -77,7 +77,7 @@ import java.util.Locale;
  *  4. Use Dpad Left/Right to find gate servo positions.
  *  5. Use GP2 left stick X to verify turret aim servo travel.
  */
-//@TeleOp(name = "Mark2InitialTesting", group = "Test")
+@TeleOp(name = "Mark2InitialTesting", group = "Test")
 public class Mark2InitialTesting extends OpMode {
 
     // ── Subsystems ────────────────────────────────────────────────────────────
@@ -96,6 +96,7 @@ public class Mark2InitialTesting extends OpMode {
     private static final double SERVO_CENTER_POS = 0.50;
     // ── Servo position tracking ───────────────────────────────────────────────
     private double intakeServoPos = SERVO_CENTER_POS;
+    private double hoodServoPos = Mark2Launcher.clipHoodPosition(SERVO_CENTER_POS);
 
     // ── Safety gate ───────────────────────────────────────────────────────────
     private boolean confirmed = false;
@@ -105,6 +106,7 @@ public class Mark2InitialTesting extends OpMode {
 
     // ── Button edge-detection ─────────────────────────────────────────────────
     private boolean prevLB2, prevRB2;
+    private boolean prevDpadUp2, prevDpadDown2;
     private boolean prevStartGp1 = false;
     private boolean prevRB1      = false;   // GP1 right bumper — alliance flip toggle
     private boolean prevRT1      = false;   // GP1 right trigger — field-centric toggle
@@ -125,6 +127,8 @@ public class Mark2InitialTesting extends OpMode {
 
         // Initialize launcher servos to safe centered positions
         manualLauncher.centerServos();
+        hoodServoPos = Mark2Launcher.clipHoodPosition(SERVO_CENTER_POS);
+        launcher.setHoodPosition(hoodServoPos);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -243,6 +247,23 @@ public class Mark2InitialTesting extends OpMode {
         // ── Manual launcher bring-up controls ─────────────────────────────────
         manualLauncher.update(gamepad2, dt);
 
+        // GP2 dpad up/down nudges the hood servo within Mark2Launcher's safe hood limits.
+        boolean dpadUp2 = gamepad2.dpad_up;
+        boolean dpadDown2 = gamepad2.dpad_down;
+
+        if (dpadUp2 && !prevDpadUp2) {
+            hoodServoPos = Mark2Launcher.clipHoodPosition(hoodServoPos + SERVO_NUDGE_STEP);
+            launcher.setHoodPosition(hoodServoPos);
+        }
+
+        if (dpadDown2 && !prevDpadDown2) {
+            hoodServoPos = Mark2Launcher.clipHoodPosition(hoodServoPos - SERVO_NUDGE_STEP);
+            launcher.setHoodPosition(hoodServoPos);
+        }
+
+        prevDpadUp2 = dpadUp2;
+        prevDpadDown2 = dpadDown2;
+
         // ── Telemetry ─────────────────────────────────────────────────────────
         Pose2D pose = drivetrain.getPose();
 
@@ -264,7 +285,7 @@ public class Mark2InitialTesting extends OpMode {
         telemetry.addData("  Zone hood", "%.3f", manualLauncher.getSelectedZoneHoodPosition());
         telemetry.addData("  Target RPM", "%.0f", manualLauncher.getTargetRpmCommand());
         telemetry.addData("  Measured RPM", "%.0f", launcher.getMeasuredRpm());
-        telemetry.addData("  Hood servo pos", "%.3f", manualLauncher.getHoodServoPos());
+        telemetry.addData("  Hood servo pos", "%.3f", launcher.getHoodPosition());
         telemetry.addData("  Gate servo pos", "%.3f", manualLauncher.getFeederServoPos());
 
         telemetry.addLine("── Intake ──────────────────────");

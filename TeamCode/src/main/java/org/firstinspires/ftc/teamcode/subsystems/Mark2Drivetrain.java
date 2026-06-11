@@ -10,10 +10,10 @@ import com.qualcomm.robotcore.hardware.I2cDeviceSynchSimple;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_LEFT_MOTOR;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.FRONT_RIGHT_MOTOR;
-import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.PINPOINT;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.REAR_LEFT_MOTOR;
 import static org.firstinspires.ftc.teamcode.subsystems.Mark2HardwareMapNames.REAR_RIGHT_MOTOR;
 
@@ -30,18 +30,6 @@ public class Mark2Drivetrain {
     // ── Pinpoint odometry ─────────────────────────────────────────────────────
     //FOR THE ODOMETRY PODS, reference SensorOctoQuad.java and/or SensorGoBildaPinpoint.java
     private GoBildaPinpointDriver odometryPods;
-
-    /**
-     * Forward-pod lateral offset from robot center (mm, positive = right of center).
-     * Measure physically and update before competition.
-     */
-    public static final double PINPOINT_X_OFFSET_MM =  0.0;   // TODO: measure
-
-    /**
-     * Strafe-pod forward offset from robot center (mm, positive = forward of center).
-     * Measure physically and update before competition.
-     */
-    public static final double PINPOINT_Y_OFFSET_MM =  0.0;   // TODO: measure
 
     /** True when Pinpoint was successfully initialized at construction time. */
     private final boolean hasPinpoint;
@@ -141,11 +129,15 @@ public class Mark2Drivetrain {
         boolean pinpointOk = false;
         GoBildaPinpointDriver pods = null;
         try {
-            pods = hardwareMap.get(GoBildaPinpointDriver.class, PINPOINT);
-            pods.setOffsets(PINPOINT_X_OFFSET_MM, PINPOINT_Y_OFFSET_MM, DistanceUnit.MM);
+            pods = hardwareMap.get(GoBildaPinpointDriver.class, Constants.PINPOINT_HARDWARE_MAP_NAME);
+            pods.setOffsets(
+                    Constants.PINPOINT_FORWARD_POD_Y_IN,
+                    Constants.PINPOINT_STRAFE_POD_X_IN,
+                    DistanceUnit.INCH);
+            pods.setEncoderResolution(Constants.PINPOINT_ENCODER_RESOLUTION);
             pods.setEncoderDirections(
-                    GoBildaPinpointDriver.EncoderDirection.FORWARD,
-                    GoBildaPinpointDriver.EncoderDirection.FORWARD);
+                    Constants.PINPOINT_FORWARD_ENCODER_DIRECTION,
+                    Constants.PINPOINT_STRAFE_ENCODER_DIRECTION);
             pods.resetPosAndIMU();
             pinpointOk = true;
         } catch (Exception e) {
@@ -337,8 +329,8 @@ public class Mark2Drivetrain {
      */
     public void driveSafe(Gamepad gamepad) {
         double flip    = allianceFlipped ? -1.0 : 1.0;
-        double forward = flip * applyExpo(applyDeadzone(-gamepad.right_stick_y, deadzone), expoTranslate);
-        double right   = flip * applyExpo(applyDeadzone( gamepad.right_stick_x, deadzone), expoTranslate);
+        double forward = flip * applyExpo(applyDeadzone( gamepad.right_stick_y, deadzone), expoTranslate);
+        double right   = flip * applyExpo(applyDeadzone(-gamepad.right_stick_x, deadzone), expoTranslate);
         double rotate  = applyExpo(applyDeadzone(-gamepad.left_stick_x,  deadzone), expoRotate);
 
         // Field-centric: rotate the translation vector so "stick forward" always
