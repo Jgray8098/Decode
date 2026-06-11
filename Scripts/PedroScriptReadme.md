@@ -1,43 +1,73 @@
 # Pedro Path Conversion Scripts
 
-These scripts provide two-way conversion between FTC Java opmode paths and Pedro Pathing visualizer/export formats.
+These scripts provide two-way conversion between FTC Java opmode paths and Pedro Pathing `.pp` project files.
 
-## 1) Java opmode -> JSON + .pp
+Input and output files live in `Scripts\InputAndOutput\`.
 
-`java_to_pedro_visualizer.py`
+---
 
-- Parses `Pose` constants and `BezierLine` path segments from Java opmodes.
-- Writes visualizer `.json` and Pedro export `.pp` in one command.
-- Uses ASCII arrows (`->`) in path names.
-- Relative input paths are resolved from `pedroPathing/scripts` first, then `pedroPathing/output`.
-- Default output is `pedroPathing/output`.
+## Workflow
 
-```powershell
-python "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\pedroPathing\scripts\java_to_pedro_visualizer.py" "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\opmodes\BlueCloseAutoHigh.java" "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\opmodes\RedCloseAutoHigh.java"
+```
+Java opmode  ──►  Convert-JavaToPedroPp.ps1  ──►  .pp file  (open in Pedro visualizer)
+                                                        │
+                                                        ▼
+Java opmode  ◄──  Convert-PedroToJavaPoints.ps1  ◄──  .pp file  (edited in Pedro visualizer)
 ```
 
-```powershell
-python "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\pedroPathing\scripts\java_to_pedro_visualizer.py" "..\..\opmodes\BlueCloseAutoHigh.java"
-```
+---
 
-## 2) .pp/.json -> Java points
+## 1) Java opmode → .pp
 
-`scripts/pedro_to_java_points.py`
+**`Convert-JavaToPedroPp.ps1`**
 
-- Parses path sequence from `.pp` (or visualizer `.json`).
-- Generates a Java fragment with named `Pose` constants and a `Paths` class.
-- Omits imports and top-level class boilerplate (fragment-only output).
-- Uses line names like `A -> B` to preserve point naming.
-- Derives `PathChain` member names from segment names (falls back only when needed).
-- Relative input paths are resolved from `pedroPathing/scripts` first, then `pedroPathing/output`.
-- Default Java output is `pedroPathing/output`.
-- Default extension is `.javafragment` so generated snippets are not compiled with opmodes.
+Parses `Pose` constants and `BezierLine` path segments (or Mark2-style `double[]` navigate calls)
+from a Java opmode and writes a Pedro Pathing `.pp` project file ready to open in the visualizer.
 
 ```powershell
-python "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\pedroPathing\scripts\pedro_to_java_points.py" "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\pedroPathing\output\pedro_paths_blue_close_auto_high.pp"
+# Single file — output goes to Scripts\InputAndOutput\
+.\Scripts\Convert-JavaToPedroPp.ps1 .\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\opmodes\BlueCloseAutoHigh.java
+
+# Multiple files
+.\Scripts\Convert-JavaToPedroPp.ps1 .\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\opmodes\BlueCloseAutoHigh.java `
+                                     .\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\opmodes\RedCloseAutoHigh.java
+
+# Custom output directory
+.\Scripts\Convert-JavaToPedroPp.ps1 BlueCloseAutoHigh.java -OutDir .\Scripts\InputAndOutput
 ```
+
+Output file naming: `pedro_paths_<snake_stem>.pp`
+
+---
+
+## 2) .pp → Java points fragment
+
+**`Convert-PedroToJavaPoints.ps1`**
+
+Reads a `.pp` project file (e.g. exported from the Pedro visualizer or produced by the script above)
+and generates a Java fragment with named `Pose` constants and a `Paths` inner class containing
+`PathChain` builder calls, ready to paste into an opmode.
 
 ```powershell
-python "C:\DEV\robot\2026\PioneerMainSeason\TeamCode\src\main\java\org\firstinspires\ftc\teamcode\pedroPathing\scripts\pedro_to_java_points.py" "pedro_paths_blue_close_auto_high.pp" --output-file "fragments\blue_close_points_fragment.javafragment"
+# Single file — output goes to Scripts\InputAndOutput\
+.\Scripts\Convert-PedroToJavaPoints.ps1 .\Scripts\InputAndOutput\pedro_paths_blue_close_auto_high.pp
+
+# All .pp files in InputAndOutput
+.\Scripts\Convert-PedroToJavaPoints.ps1 .\Scripts\InputAndOutput\*.pp
+
+# Explicit output file
+.\Scripts\Convert-PedroToJavaPoints.ps1 .\Scripts\InputAndOutput\pedro_paths_blue_close_auto_high.pp `
+    -OutputFile .\Scripts\InputAndOutput\blue_close_points.javafragment
 ```
 
+Output file naming: `<input_stem>_points.javafragment`
+
+The `.javafragment` extension keeps generated snippets out of the Gradle compile path.
+
+---
+
+## Notes
+
+- All output defaults to `Scripts\InputAndOutput\` — no `-OutDir` needed when running from the project root.
+- Path names use `A -> B` arrow notation to preserve point names through the round-trip.
+- `Math.toRadians(...)` headings and bare radian literals are both handled automatically.

@@ -1,21 +1,21 @@
 <#
 .SYNOPSIS
-    Convert Pedro .pp or visualizer .json files into named Java Pose points.
+    Convert Pedro .pp project files into named Java Pose points.
 .DESCRIPTION
-    Reads a Pedro Pathing .pp project file or a visualizer JSON array and generates
-    a Java code fragment containing named Pose constants and a Paths inner class with
-    PathChain builder calls, ready to paste into an opmode.
+    Reads a Pedro Pathing .pp project file and generates a Java code fragment
+    containing named Pose constants and a Paths inner class with PathChain builder
+    calls, ready to paste into an opmode.
 .PARAMETER InputFiles
-    One or more .pp or .json input files.
+    One or more .pp input files.
 .PARAMETER OutDir
     Directory to write output .javafragment files.
-    Defaults to the pedroPathing output folder in TeamCode.
+    Defaults to Scripts\InputAndOutput.
 .PARAMETER OutputFile
     Explicit output path (only valid when exactly one InputFile is given).
 .EXAMPLE
     .\Convert-PedroToJavaPoints.ps1 pedro_paths_blue_close_auto_high.pp
 .EXAMPLE
-    .\Convert-PedroToJavaPoints.ps1 .\output\*.pp -OutDir .\output
+    .\Convert-PedroToJavaPoints.ps1 .\InputAndOutput\*.pp -OutDir .\InputAndOutput
 #>
 [CmdletBinding()]
 param(
@@ -32,7 +32,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:DefaultOutputDir = Join-Path $PSScriptRoot 'output'
+$script:DefaultOutputDir = Join-Path $PSScriptRoot 'InputAndOutput'
 
 # ---------------------------------------------------------------------------
 # Shared helper
@@ -62,17 +62,28 @@ function ConvertTo-ConstName {
 }
 
 function Split-SegmentNames {
-    <# Equivalent to split_segment_names() #>
+    <# Splits "A -> B" or "A to B" (Pedro visualizer style) into two const names. #>
     param([string]$LineName, [int]$Idx)
     $cleaned = [regex]::Replace((Normalize-Arrow $LineName), '^\d+\s*', '').Trim()
+
+    # Prefer '->' separator; also accept ' to ' (case-insensitive, word boundary)
     if ($cleaned -match '->') {
         $parts = $cleaned -split '->', 2
         $left  = ConvertTo-ConstName $parts[0].Trim() ('POINT_{0:D2}' -f $Idx)
         $right = ConvertTo-ConstName $parts[1].Trim() ('POINT_{0:D2}' -f ($Idx + 1))
         return $left, $right
     }
-    $p1 = ConvertTo-ConstName ('POINT_{0:D2}' -f $Idx)       ('POINT_{0:D2}' -f $Idx)
-    $p2 = ConvertTo-ConstName $cleaned                        ('POINT_{0:D2}' -f ($Idx + 1))
+    if ($cleaned -match '(?i)\bto\b') {
+        $parts = [regex]::Split($cleaned, '(?i)\s+to\s+', 2)
+        if ($parts.Count -eq 2) {
+            $left  = ConvertTo-ConstName $parts[0].Trim() ('POINT_{0:D2}' -f $Idx)
+            $right = ConvertTo-ConstName $parts[1].Trim() ('POINT_{0:D2}' -f ($Idx + 1))
+            return $left, $right
+        }
+    }
+    # No recognisable separator — use generic fallbacks
+    $p1 = ConvertTo-ConstName ('POINT_{0:D2}' -f $Idx)  ('POINT_{0:D2}' -f $Idx)
+    $p2 = ConvertTo-ConstName $cleaned                   ('POINT_{0:D2}' -f ($Idx + 1))
     return $p1, $p2
 }
 
@@ -93,31 +104,29 @@ function ConvertTo-CamelCase {
 }
 
 function Get-PathMemberName {
-    <# Equivalent to derive_path_member_name() #>
+    <# Derives a camelCase PathChain member name from the segment's start/end names. #>
     param($Segment, [int]$Idx, [System.Collections.Generic.HashSet[string]]$Used)
 
     $startPascal = ConvertTo-PascalFromConst $Segment.start_name
     $endPascal   = ConvertTo-PascalFromConst $Segment.end_name
 
-    $preferred = ConvertTo-CamelCase $endPascal
+    # Always prefer the full "startToEnd" form so the path name is self-describing.
+    $preferred = ConvertTo-CamelCase "${startPascal}To${endPascal}"
     if ($preferred -and -not $Used.Contains($preferred)) {
         $Used.Add($preferred) | Out-Null
         return $preferred
     }
 
-    $combined = ConvertTo-CamelCase "${startPascal}To${endPascal}"
-    if (-not $Used.Contains($combined)) {
-        $Used.Add($combined) | Out-Null
-        return $combined
+    # Collision — append a numeric suffix.
+    $i = 2
+    while ($true) {
+        $candidate = "${preferred}${i}"
+        if (-not $Used.Contains($candidate)) {
+            $Used.Add($candidate) | Out-Null
+            return $candidate
+        }
+        $i++
     }
-
-    $fallback = 'segment{0:D2}' -f $Idx
-    while ($Used.Contains($fallback)) {
-        $Idx++
-        $fallback = 'segment{0:D2}' -f $Idx
-    }
-    $Used.Add($fallback) | Out-Null
-    return $fallback
 }
 
 function Build-NamedSegments {
@@ -167,6 +176,20 @@ function Ensure-Unique {
 # Segment readers
 # ---------------------------------------------------------------------------
 
+function Get-OptionalDeg {
+    <#
+        Safely read a numeric degree property from a PSCustomObject.
+        Returns $Fallback when the property is absent (tangential segments
+        do not have startDeg / endDeg) or when the value is not numeric.
+    #>
+    param([object]$Obj, [string]$PropName, [double]$Fallback)
+    $props = $Obj.PSObject.Properties
+    if (-not $props[$PropName]) { return $Fallback }
+    $val = $props[$PropName].Value
+    if ($null -eq $val) { return $Fallback }
+    try { return [double]$val } catch { return $Fallback }
+}
+
 function Read-SegmentsFromPp {
     param([object]$Project)
     $start   = $Project.startPoint
@@ -178,7 +201,7 @@ function Read-SegmentsFromPp {
     $current = @{
         x           = [double]$start.x
         y           = [double]$start.y
-        heading_deg = [double]$start.startDeg
+        heading_deg = Get-OptionalDeg $start 'startDeg' 0.0
     }
 
     $segments = [System.Collections.Generic.List[object]]::new()
@@ -189,11 +212,16 @@ function Read-SegmentsFromPp {
         $line = $lineMap[$item.lineId]
         if (-not $line) { continue }
 
-        $endp = $line.endPoint
-        $end  = @{
+        $endp    = $line.endPoint
+        # For tangential segments startDeg/endDeg are absent; fall back to the
+        # incoming heading so the Java fragment stays numerically consistent.
+        $startDeg = Get-OptionalDeg $endp 'startDeg' $current.heading_deg
+        $endDeg   = Get-OptionalDeg $endp 'endDeg'   $current.heading_deg
+
+        $end = @{
             x           = [double]$endp.x
             y           = [double]$endp.y
-            heading_deg = [double]$endp.endDeg
+            heading_deg = $endDeg
         }
 
         $rawName   = [string]$line.name
@@ -204,7 +232,7 @@ function Read-SegmentsFromPp {
         $startWithHeading = @{
             x           = $current.x
             y           = $current.y
-            heading_deg = [double]$endp.startDeg
+            heading_deg = $startDeg
         }
 
         $segments.Add(@{
@@ -220,33 +248,6 @@ function Read-SegmentsFromPp {
     }
 
     if ($segments.Count -eq 0) { throw "No path sequence entries found in .pp file." }
-    return $segments.ToArray()
-}
-
-function Read-SegmentsFromJson {
-    param([object[]]$Paths)
-    $segments = [System.Collections.Generic.List[object]]::new()
-
-    for ($i = 0; $i -lt $Paths.Count; $i++) {
-        $path = $Paths[$i]
-        $wps  = $path.waypoints
-        if ($wps.Count -lt 2) { continue }
-        $startWp = $wps[0]
-        $endWp   = $wps[-1]
-        $rawName = [string]$path.name
-        $idx     = $i + 1
-        $names   = Split-SegmentNames $rawName $idx
-
-        $segments.Add(@{
-            name       = Normalize-Arrow $rawName
-            start_name = $names[0]
-            end_name   = $names[1]
-            start      = @{ x = [double]$startWp.x; y = [double]$startWp.y; heading_deg = [double]$startWp.heading }
-            end        = @{ x = [double]$endWp.x;   y = [double]$endWp.y;   heading_deg = [double]$endWp.heading }
-        })
-    }
-
-    if ($segments.Count -eq 0) { throw "No valid paths found in .json file." }
     return $segments.ToArray()
 }
 
@@ -329,10 +330,8 @@ function Convert-PedroFile {
     $ext = [System.IO.Path]::GetExtension($InputPath).ToLower()
     if ($ext -eq '.pp') {
         $segments = Read-SegmentsFromPp $payload
-    } elseif ($payload -is [array]) {
-        $segments = Read-SegmentsFromJson $payload
     } else {
-        throw "Unsupported input format for $([System.IO.Path]::GetFileName($InputPath))"
+        throw "Unsupported input format for $([System.IO.Path]::GetFileName($InputPath)). Only .pp files are supported."
     }
 
     $stem      = [System.IO.Path]::GetFileNameWithoutExtension($InputPath)

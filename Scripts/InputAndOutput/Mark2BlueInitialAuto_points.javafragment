@@ -1,0 +1,130 @@
+﻿private static final Pose STARTINGPOSITION_POSE = new Pose(19.450, 119.623, Math.toRadians(323.000));
+private static final Pose FIRELOCATION_POSE = new Pose(55.393, 85.593, Math.toRadians(310.000));
+private static final Pose INTAKEFLOORMIDDLE_POSE = new Pose(22.913, 58.959, Math.toRadians(310.000));
+private static final Pose INTAKEFLOORMIDDLE_POSE_2 = new Pose(22.913, 58.959, Math.toRadians(180.000));
+private static final Pose FIRELOCATION_POSE_2 = new Pose(55.238, 85.504, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE = new Pose(13.642, 59.503, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_2 = new Pose(13.642, 59.503, Math.toRadians(155.000));
+private static final Pose FIRELOCATION_POSE_3 = new Pose(55.492, 85.180, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_3 = new Pose(13.656, 59.517, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_4 = new Pose(13.656, 59.517, Math.toRadians(155.000));
+private static final Pose FIRELOCATION_POSE_4 = new Pose(55.333, 85.523, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_5 = new Pose(13.693, 59.558, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_6 = new Pose(13.693, 59.558, Math.toRadians(155.000));
+private static final Pose FIRELOCATION_POSE_5 = new Pose(55.297, 85.502, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_7 = new Pose(13.833, 59.559, Math.toRadians(220.000));
+private static final Pose GATELOAD_POSE_8 = new Pose(13.833, 59.559, Math.toRadians(155.000));
+private static final Pose FIRELOCATION_POSE_6 = new Pose(55.436, 85.618, Math.toRadians(220.000));
+private static final Pose FIRELOCATION_POSE_7 = new Pose(55.436, 85.618, Math.toRadians(180.000));
+private static final Pose INTAKEFLOORCLOSE_POSE = new Pose(23.797, 83.290, Math.toRadians(180.000));
+private static final Pose FINALFIREPOSITION_POSE = new Pose(56.682, 103.156, Math.toRadians(220.000));
+
+public static class Paths {
+    public PathChain startingpositionToFirelocation;
+    public PathChain firelocationToIntakefloormiddle;
+    public PathChain intakefloormiddlePose2ToFirelocationPose2;
+    public PathChain firelocationPose2ToGateload;
+    public PathChain gateloadPose2ToFirelocationPose3;
+    public PathChain firelocationPose3ToGateloadPose3;
+    public PathChain gateloadPose4ToFirelocationPose4;
+    public PathChain firelocationPose4ToGateloadPose5;
+    public PathChain gateloadPose6ToFirelocationPose5;
+    public PathChain firelocationPose5ToGateloadPose7;
+    public PathChain gateloadPose8ToFirelocationPose6;
+    public PathChain firelocationPose7ToIntakefloorclose;
+    public PathChain intakefloorcloseToFinalfireposition;
+
+    public Paths(Follower follower) {
+        // StartingPosition to FireLocation
+        startingpositionToFirelocation = follower
+                .pathBuilder()
+                .addPath(new BezierLine(STARTINGPOSITION_POSE, FIRELOCATION_POSE))
+                .setLinearHeadingInterpolation(STARTINGPOSITION_POSE.getHeading(), FIRELOCATION_POSE.getHeading())
+                .build();
+
+        // FIreLocation to IntakeFloorMiddle
+        firelocationToIntakefloormiddle = follower
+                .pathBuilder()
+                .addPath(new BezierLine(FIRELOCATION_POSE, INTAKEFLOORMIDDLE_POSE))
+                .setLinearHeadingInterpolation(FIRELOCATION_POSE.getHeading(), INTAKEFLOORMIDDLE_POSE.getHeading())
+                .build();
+
+        // IntakeFloorMiddle to FireLocation
+        intakefloormiddlePose2ToFirelocationPose2 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKEFLOORMIDDLE_POSE_2, FIRELOCATION_POSE_2))
+                .setLinearHeadingInterpolation(INTAKEFLOORMIDDLE_POSE_2.getHeading(), FIRELOCATION_POSE_2.getHeading())
+                .build();
+
+        // FIreLocation to GateLoad
+        firelocationPose2ToGateload = follower
+                .pathBuilder()
+                .addPath(new BezierLine(FIRELOCATION_POSE_2, GATELOAD_POSE))
+                .setLinearHeadingInterpolation(FIRELOCATION_POSE_2.getHeading(), GATELOAD_POSE.getHeading())
+                .build();
+
+        // GateLoad to FireLocation
+        gateloadPose2ToFirelocationPose3 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(GATELOAD_POSE_2, FIRELOCATION_POSE_3))
+                .setLinearHeadingInterpolation(GATELOAD_POSE_2.getHeading(), FIRELOCATION_POSE_3.getHeading())
+                .build();
+
+        // FireLocation to GateLoad
+        firelocationPose3ToGateloadPose3 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(FIRELOCATION_POSE_3, GATELOAD_POSE_3))
+                .setLinearHeadingInterpolation(FIRELOCATION_POSE_3.getHeading(), GATELOAD_POSE_3.getHeading())
+                .build();
+
+        // GateLoad to FireLocation
+        gateloadPose4ToFirelocationPose4 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(GATELOAD_POSE_4, FIRELOCATION_POSE_4))
+                .setLinearHeadingInterpolation(GATELOAD_POSE_4.getHeading(), FIRELOCATION_POSE_4.getHeading())
+                .build();
+
+        // FireLocation to GateLoad
+        firelocationPose4ToGateloadPose5 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(FIRELOCATION_POSE_4, GATELOAD_POSE_5))
+                .setLinearHeadingInterpolation(FIRELOCATION_POSE_4.getHeading(), GATELOAD_POSE_5.getHeading())
+                .build();
+
+        // GateLoad to FireLocation
+        gateloadPose6ToFirelocationPose5 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(GATELOAD_POSE_6, FIRELOCATION_POSE_5))
+                .setLinearHeadingInterpolation(GATELOAD_POSE_6.getHeading(), FIRELOCATION_POSE_5.getHeading())
+                .build();
+
+        // FireLocation to GateLoad
+        firelocationPose5ToGateloadPose7 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(FIRELOCATION_POSE_5, GATELOAD_POSE_7))
+                .setLinearHeadingInterpolation(FIRELOCATION_POSE_5.getHeading(), GATELOAD_POSE_7.getHeading())
+                .build();
+
+        // GateLoad to FireLocation
+        gateloadPose8ToFirelocationPose6 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(GATELOAD_POSE_8, FIRELOCATION_POSE_6))
+                .setLinearHeadingInterpolation(GATELOAD_POSE_8.getHeading(), FIRELOCATION_POSE_6.getHeading())
+                .build();
+
+        // FIreLocation to IntakeFloorClose
+        firelocationPose7ToIntakefloorclose = follower
+                .pathBuilder()
+                .addPath(new BezierLine(FIRELOCATION_POSE_7, INTAKEFLOORCLOSE_POSE))
+                .setLinearHeadingInterpolation(FIRELOCATION_POSE_7.getHeading(), INTAKEFLOORCLOSE_POSE.getHeading())
+                .build();
+
+        // IntakeFloorClose to FinalFirePosition
+        intakefloorcloseToFinalfireposition = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKEFLOORCLOSE_POSE, FINALFIREPOSITION_POSE))
+                .setLinearHeadingInterpolation(INTAKEFLOORCLOSE_POSE.getHeading(), FINALFIREPOSITION_POSE.getHeading())
+                .build();
+
+    }
+}

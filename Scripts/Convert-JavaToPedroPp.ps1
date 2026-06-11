@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
-    Convert Java Pedro opmode files into visualizer JSON and exported .pp files.
+    Convert Java Pedro opmode files into Pedro Pathing .pp project files.
 .DESCRIPTION
     Parses a Java opmode file that uses the Pedro Pathing library, extracts all
     Pose definitions and pathBuilder chains (or Mark2-style double[] navigate calls),
-    and writes a visualizer-compatible .json file and a Pedro Pathing .pp project file.
+    and writes a Pedro Pathing .pp project file ready to open in the Pedro visualizer.
 .PARAMETER JavaFiles
     One or more input Java opmode .java files.
 .PARAMETER OutDir
-    Directory to write the generated .json and .pp files.
-    Defaults to the pedroPathing output folder in TeamCode.
+    Directory to write the generated .pp files.
+    Defaults to Scripts\InputAndOutput.
 .EXAMPLE
-    .\Convert-JavaToVisualizer.ps1 BlueCloseAutoHigh.java
+    .\Convert-JavaToPedroPp.ps1 BlueCloseAutoHigh.java
 .EXAMPLE
-    .\Convert-JavaToVisualizer.ps1 .\opmodes\*.java -OutDir .\output
+    .\Convert-JavaToPedroPp.ps1 .\opmodes\*.java -OutDir .\Scripts\InputAndOutput
 #>
 [CmdletBinding()]
 param(
@@ -27,7 +27,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:DefaultOutputDir = Join-Path $PSScriptRoot 'output'
+$script:DefaultOutputDir = Join-Path $PSScriptRoot 'InputAndOutput'
 
 $script:PP_COLORS = @(
     '#ffc516', '#5B9C9A', '#857B75', '#C9DB67',
@@ -139,7 +139,6 @@ function ConvertTo-PoseLiteral {
 }
 
 function Get-PoseDefinitions {
-    <# Equivalent to parse_pose_definitions() #>
     param([string]$Text)
     $resolved = [ordered]@{}
     $aliases  = @{}
@@ -191,8 +190,6 @@ function Find-MatchingParen {
 }
 
 function Get-BezierPairs {
-    # Returns a List[hashtable] with .Start and .End keys.
-    # Using hashtables (not arrays) prevents PowerShell pipeline unrolling.
     param([string]$Body)
     $pairs  = [System.Collections.Generic.List[hashtable]]::new()
     $token  = 'new BezierLine('
@@ -210,7 +207,7 @@ function Get-BezierPairs {
         }
         $start = $closeIdx + 1
     }
-    return ,$pairs   # leading comma prevents the List itself from being unrolled
+    return ,$pairs
 }
 
 # ===========================================================================
@@ -218,7 +215,6 @@ function Get-BezierPairs {
 # ===========================================================================
 
 function Get-PathChains {
-    <# Equivalent to parse_segments() #>
     param([string]$Text)
     $chains  = [ordered]@{}
     $chainRe = [regex]::new(
@@ -254,7 +250,6 @@ function Get-PathChains {
 }
 
 function Get-OrderedSegments {
-    <# Equivalent to ordered_segments() #>
     param([string]$Text, [System.Collections.Specialized.OrderedDictionary]$ChainMap)
     $followRe = [regex]::new('followPath\(\s*paths\.(\w+)')
     $order    = [System.Collections.Generic.List[string]]::new()
@@ -347,7 +342,7 @@ function Get-Mark2StartPose {
     return $null, $null
 }
 
-function Build-Mark2VisualizerPaths {
+function Build-Mark2Paths {
     param([string]$Text)
     $named              = Get-Mark2Arrays $Text
     $startName, $startPose = Get-Mark2StartPose $Text
@@ -383,14 +378,14 @@ function Build-Mark2VisualizerPaths {
 # Main path builder
 # ===========================================================================
 
-function Build-VisualizerPaths {
+function Build-Paths {
     param([string]$Text)
     $poses    = Get-PoseDefinitions $Text
     $chainMap = Get-PathChains $Text
     $segs     = Get-OrderedSegments $Text $chainMap
 
     if ($segs.Count -eq 0) {
-        $mark2 = Build-Mark2VisualizerPaths $Text
+        $mark2 = Build-Mark2Paths $Text
         if ($mark2.Count -gt 0) { return $mark2 }
         throw 'No Pedro path segments found in Java file.'
     }
@@ -417,10 +412,10 @@ function Build-VisualizerPaths {
 }
 
 # ===========================================================================
-# .pp conversion (inlined from Convert-JsonToPedroPp.ps1)
+# .pp project builder
 # ===========================================================================
 
-function Convert-JsonPathsToPedroProject {
+function Convert-PathsToPedroProject {
     param([object[]]$Paths, [string]$ChainName)
 
     $firstWp     = $Paths[0].waypoints[0]
@@ -497,22 +492,18 @@ function Write-Outputs {
     param([string]$JavaFilePath, [string]$OutputDir)
 
     $source    = [System.IO.File]::ReadAllText($JavaFilePath, [System.Text.Encoding]::UTF8)
-    $paths     = Build-VisualizerPaths $source
+    $paths     = Build-Paths $source
 
     $stem      = ConvertTo-SnakeStem ([System.IO.Path]::GetFileNameWithoutExtension($JavaFilePath))
     $baseName  = "pedro_paths_$stem"
-    $jsonOut   = Join-Path $OutputDir "$baseName.json"
     $ppOut     = Join-Path $OutputDir "$baseName.pp"
 
-    $jsonText  = ConvertTo-CleanJson $paths
-    [System.IO.File]::WriteAllText($jsonOut, ($jsonText + "`n"), [System.Text.Encoding]::UTF8)
-
     $chainName = ConvertTo-TitleChainName $stem
-    $project   = Convert-JsonPathsToPedroProject -Paths $paths -ChainName $chainName
+    $project   = Convert-PathsToPedroProject -Paths $paths -ChainName $chainName
     $ppText    = ConvertTo-CleanJson $project
     [System.IO.File]::WriteAllText($ppOut, ($ppText + "`n"), [System.Text.Encoding]::UTF8)
 
-    return $jsonOut, $ppOut
+    return $ppOut
 }
 
 # ===========================================================================
@@ -533,20 +524,11 @@ foreach ($filePattern in $JavaFiles) {
     if (-not $items) { $items = Get-Item -LiteralPath $filePattern }
     foreach ($item in $items) {
         try {
-            $jsonOut, $ppOut = Write-Outputs -JavaFilePath $item.FullName -OutputDir $resolvedOutDir
-            Write-Host "Wrote $jsonOut"
+            $ppOut = Write-Outputs -JavaFilePath $item.FullName -OutputDir $resolvedOutDir
             Write-Host "Wrote $ppOut"
         } catch {
             Write-Warning "Skipped $($item.Name): $_"
         }
     }
 }
-
-
-
-
-
-
-
-
 
