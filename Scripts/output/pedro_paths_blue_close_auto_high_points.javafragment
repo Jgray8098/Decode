@@ -1,0 +1,124 @@
+﻿private static final Pose APRILTAG_POSE_START = new Pose(20.461, 123.153, Math.toRadians(54.000));
+private static final Pose APRILTAG_POSE_END = new Pose(47.099, 95.936, Math.toRadians(74.000));
+private static final Pose LAUNCH_PRELOADS_POSE = new Pose(53.239, 99.989, Math.toRadians(155.000));
+private static final Pose ALIGN_INTAKE1_POSE = new Pose(44.432, 88.477, Math.toRadians(180.000));
+private static final Pose INTAKE_P11_POSE = new Pose(37.834, 88.477, Math.toRadians(180.000));
+private static final Pose INTAKE_P12_POSE = new Pose(32.043, 87.477, Math.toRadians(180.000));
+private static final Pose INTAKE_G11_POSE = new Pose(27.024, 87.477, Math.toRadians(180.000));
+private static final Pose LAUNCH_FIRST_ROW_POSE = new Pose(51.046, 98.182, Math.toRadians(141.000));
+private static final Pose ALIGN_INTAKE2_POSE = new Pose(46.694, 63.928, Math.toRadians(180.000));
+private static final Pose INTAKE_P21_POSE = new Pose(38.027, 63.928, Math.toRadians(180.000));
+private static final Pose INTAKE_G21_POSE = new Pose(32.622, 62.928, Math.toRadians(180.000));
+private static final Pose INTAKE_P22_POSE = new Pose(27.410, 62.928, Math.toRadians(180.000));
+private static final Pose LAUNCH_SECOND_ROW_POSE = new Pose(52.046, 98.182, Math.toRadians(144.000));
+private static final Pose PARK_POSE = new Pose(34.568, 75.475, Math.toRadians(180.000));
+
+public static class Paths {
+    public PathChain apriltagPoseEnd;
+    public PathChain launchPreloads;
+    public PathChain alignIntake1;
+    public PathChain intakeP11;
+    public PathChain intakeP12;
+    public PathChain intakeG11;
+    public PathChain launchFirstRow;
+    public PathChain alignIntake2;
+    public PathChain intakeP21;
+    public PathChain intakeG21;
+    public PathChain intakeP22;
+    public PathChain launchSecondRow;
+    public PathChain park;
+
+    public Paths(Follower follower) {
+        // 1 APRILTAG_POSE_START -> APRILTAG_POSE_END
+        apriltagPoseEnd = follower
+                .pathBuilder()
+                .addPath(new BezierLine(APRILTAG_POSE_START, APRILTAG_POSE_END))
+                .setLinearHeadingInterpolation(APRILTAG_POSE_START.getHeading(), APRILTAG_POSE_END.getHeading())
+                .build();
+
+        // 2 APRILTAG_POSE_END -> LAUNCH_PRELOADS_POSE
+        launchPreloads = follower
+                .pathBuilder()
+                .addPath(new BezierLine(APRILTAG_POSE_END, LAUNCH_PRELOADS_POSE))
+                .setLinearHeadingInterpolation(APRILTAG_POSE_END.getHeading(), LAUNCH_PRELOADS_POSE.getHeading())
+                .build();
+
+        // 3 LAUNCH_PRELOADS_POSE -> ALIGN_INTAKE1_POSE
+        alignIntake1 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(LAUNCH_PRELOADS_POSE, ALIGN_INTAKE1_POSE))
+                .setLinearHeadingInterpolation(LAUNCH_PRELOADS_POSE.getHeading(), ALIGN_INTAKE1_POSE.getHeading())
+                .build();
+
+        // 4 ALIGN_INTAKE1_POSE -> INTAKE_P11_POSE
+        intakeP11 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(ALIGN_INTAKE1_POSE, INTAKE_P11_POSE))
+                .setLinearHeadingInterpolation(ALIGN_INTAKE1_POSE.getHeading(), INTAKE_P11_POSE.getHeading())
+                .build();
+
+        // 5 INTAKE_P11_POSE -> INTAKE_P12_POSE
+        intakeP12 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKE_P11_POSE, INTAKE_P12_POSE))
+                .setLinearHeadingInterpolation(INTAKE_P11_POSE.getHeading(), INTAKE_P12_POSE.getHeading())
+                .build();
+
+        // 6 INTAKE_P12_POSE -> INTAKE_G11_POSE
+        intakeG11 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKE_P12_POSE, INTAKE_G11_POSE))
+                .setLinearHeadingInterpolation(INTAKE_P12_POSE.getHeading(), INTAKE_G11_POSE.getHeading())
+                .build();
+
+        // 7 INTAKE_G11_POSE -> LAUNCH_FIRST_ROW_POSE
+        launchFirstRow = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKE_G11_POSE, LAUNCH_FIRST_ROW_POSE))
+                .setLinearHeadingInterpolation(INTAKE_G11_POSE.getHeading(), LAUNCH_FIRST_ROW_POSE.getHeading())
+                .build();
+
+        // 8 LAUNCH_FIRST_ROW_POSE -> ALIGN_INTAKE2_POSE
+        alignIntake2 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(LAUNCH_FIRST_ROW_POSE, ALIGN_INTAKE2_POSE))
+                .setLinearHeadingInterpolation(LAUNCH_FIRST_ROW_POSE.getHeading(), ALIGN_INTAKE2_POSE.getHeading())
+                .build();
+
+        // 9 ALIGN_INTAKE2_POSE -> INTAKE_P21_POSE
+        intakeP21 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(ALIGN_INTAKE2_POSE, INTAKE_P21_POSE))
+                .setLinearHeadingInterpolation(ALIGN_INTAKE2_POSE.getHeading(), INTAKE_P21_POSE.getHeading())
+                .build();
+
+        // 10 INTAKE_P21_POSE -> INTAKE_G21_POSE
+        intakeG21 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKE_P21_POSE, INTAKE_G21_POSE))
+                .setLinearHeadingInterpolation(INTAKE_P21_POSE.getHeading(), INTAKE_G21_POSE.getHeading())
+                .build();
+
+        // 11 INTAKE_G21_POSE -> INTAKE_P22_POSE
+        intakeP22 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKE_G21_POSE, INTAKE_P22_POSE))
+                .setLinearHeadingInterpolation(INTAKE_G21_POSE.getHeading(), INTAKE_P22_POSE.getHeading())
+                .build();
+
+        // 12 INTAKE_P22_POSE -> LAUNCH_SECOND_ROW_POSE
+        launchSecondRow = follower
+                .pathBuilder()
+                .addPath(new BezierLine(INTAKE_P22_POSE, LAUNCH_SECOND_ROW_POSE))
+                .setLinearHeadingInterpolation(INTAKE_P22_POSE.getHeading(), LAUNCH_SECOND_ROW_POSE.getHeading())
+                .build();
+
+        // 13 LAUNCH_SECOND_ROW_POSE -> PARK_POSE
+        park = follower
+                .pathBuilder()
+                .addPath(new BezierLine(LAUNCH_SECOND_ROW_POSE, PARK_POSE))
+                .setLinearHeadingInterpolation(LAUNCH_SECOND_ROW_POSE.getHeading(), PARK_POSE.getHeading())
+                .build();
+
+    }
+}

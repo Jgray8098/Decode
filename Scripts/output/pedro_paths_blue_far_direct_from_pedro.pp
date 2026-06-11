@@ -1,22 +1,22 @@
 {
   "startPoint": {
-    "x": 20.461,
-    "y": 123.153,
+    "x": 62.006,
+    "y": 9.021,
     "heading": "linear",
-    "startDeg": 54.0,
-    "endDeg": 74.0,
+    "startDeg": 90.0,
+    "endDeg": 0.0,
     "locked": false
   },
   "lines": [
     {
       "id": "line-001",
-      "name": "1 Start \u2192 AprilTagPosition",
+      "name": "1 LITERAL_POINT_01 -> LITERAL_POINT_02",
       "endPoint": {
-        "x": 47.099,
-        "y": 95.936,
+        "x": 59.152,
+        "y": 22.663,
         "heading": "linear",
-        "startDeg": 54.0,
-        "endDeg": 74.0
+        "startDeg": 90.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#ffc516",
@@ -28,13 +28,13 @@
     },
     {
       "id": "line-002",
-      "name": "2 AprilTagPosition \u2192 LaunchPreloads",
+      "name": "2 LITERAL_POINT_03 -> LITERAL_POINT_04",
       "endPoint": {
-        "x": 53.239,
-        "y": 99.989,
+        "x": 55.0,
+        "y": 15.0,
         "heading": "linear",
-        "startDeg": 74.0,
-        "endDeg": 155.0
+        "startDeg": 117.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#5B9C9A",
@@ -46,13 +46,13 @@
     },
     {
       "id": "line-003",
-      "name": "3 LaunchPreloads \u2192 AlignIntake1",
+      "name": "3 LITERAL_POINT_05 -> LITERAL_POINT_06",
       "endPoint": {
-        "x": 44.432,
-        "y": 88.477,
+        "x": 17.454,
+        "y": 15.0,
         "heading": "linear",
-        "startDeg": 155.0,
-        "endDeg": 180.0
+        "startDeg": 180.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#857B75",
@@ -64,13 +64,13 @@
     },
     {
       "id": "line-004",
-      "name": "4 AlignIntake1 \u2192 IntakePurple11",
+      "name": "4 LITERAL_POINT_07 -> LITERAL_POINT_08",
       "endPoint": {
-        "x": 37.834,
-        "y": 88.477,
+        "x": 18.951,
+        "y": 16.227,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 180.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#C9DB67",
@@ -82,13 +82,13 @@
     },
     {
       "id": "line-005",
-      "name": "5 IntakePurple11 \u2192 IntakePurple12",
+      "name": "5 LITERAL_POINT_09 -> LITERAL_POINT_10",
       "endPoint": {
-        "x": 32.043,
-        "y": 87.477,
+        "x": 18.969,
+        "y": 12.018,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 180.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#60a5fa",
@@ -100,13 +100,13 @@
     },
     {
       "id": "line-006",
-      "name": "6 IntakePurple12 \u2192 IntakeGreen11",
+      "name": "6 LITERAL_POINT_11 -> LITERAL_POINT_12",
       "endPoint": {
-        "x": 27.024,
-        "y": 87.477,
+        "x": 13.675,
+        "y": 10.982,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 180.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#ff6b6b",
@@ -118,13 +118,13 @@
     },
     {
       "id": "line-007",
-      "name": "7 IntakeGreen11 \u2192 LaunchFirstRow",
+      "name": "7 LITERAL_POINT_13 -> LITERAL_POINT_14",
       "endPoint": {
-        "x": 51.046,
-        "y": 98.182,
+        "x": 54.0,
+        "y": 21.0,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 141.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#f97316",
@@ -136,13 +136,13 @@
     },
     {
       "id": "line-008",
-      "name": "8 LaunchFirstRow \u2192 AlignIntake2",
+      "name": "8 LITERAL_POINT_15 -> LITERAL_POINT_16",
       "endPoint": {
-        "x": 46.694,
-        "y": 63.928,
+        "x": 50.0,
+        "y": 34.0,
         "heading": "linear",
-        "startDeg": 141.0,
-        "endDeg": 180.0
+        "startDeg": 109.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#ffc516",
@@ -154,13 +154,13 @@
     },
     {
       "id": "line-009",
-      "name": "9 AlignIntake2 \u2192 IntakePurple21",
+      "name": "9 LITERAL_POINT_17 -> LITERAL_POINT_18",
       "endPoint": {
-        "x": 38.027,
-        "y": 63.928,
+        "x": 37.204,
+        "y": 34.0,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 180.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#5B9C9A",
@@ -172,13 +172,13 @@
     },
     {
       "id": "line-010",
-      "name": "10 IntakePurple21 \u2192 IntakeGreen21",
+      "name": "10 LITERAL_POINT_19 -> LITERAL_POINT_20",
       "endPoint": {
-        "x": 32.622,
-        "y": 62.928,
+        "x": 32.389,
+        "y": 35.0,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 180.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#857B75",
@@ -190,13 +190,13 @@
     },
     {
       "id": "line-011",
-      "name": "11 IntakeGreen21 \u2192 IntakePurple22",
+      "name": "11 LITERAL_POINT_21 -> LITERAL_POINT_22",
       "endPoint": {
-        "x": 27.41,
-        "y": 62.928,
+        "x": 27.793,
+        "y": 35.0,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 180.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#C9DB67",
@@ -208,13 +208,13 @@
     },
     {
       "id": "line-012",
-      "name": "12 IntakePurple22 \u2192 LaunchSecondRow",
+      "name": "12 LITERAL_POINT_23 -> LITERAL_POINT_24",
       "endPoint": {
-        "x": 52.046,
-        "y": 98.182,
+        "x": 52.0,
+        "y": 21.0,
         "heading": "linear",
         "startDeg": 180.0,
-        "endDeg": 144.0
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#60a5fa",
@@ -226,13 +226,13 @@
     },
     {
       "id": "line-013",
-      "name": "13 LaunchSecondRow \u2192 Park",
+      "name": "13 LITERAL_POINT_25 -> LITERAL_POINT_26",
       "endPoint": {
-        "x": 34.568,
-        "y": 75.475,
+        "x": 38.81,
+        "y": 15.074,
         "heading": "linear",
-        "startDeg": 144.0,
-        "endDeg": 180.0
+        "startDeg": 111.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#ff6b6b",
@@ -300,8 +300,8 @@
   ],
   "pathChains": [
     {
-      "id": "chain-Pedro Paths Blue Close High",
-      "name": "Pedro Paths Blue Close High",
+      "id": "chain-Blue Far Direct From Pedro",
+      "name": "Blue Far Direct From Pedro",
       "color": "#C9DB67",
       "lineIds": [
         "line-001",
@@ -321,5 +321,5 @@
     }
   ],
   "version": "1.2.1",
-  "timestamp": "2026-06-02T21:26:40.211Z"
+  "timestamp": "2026-06-10T23:43:18.859Z"
 }

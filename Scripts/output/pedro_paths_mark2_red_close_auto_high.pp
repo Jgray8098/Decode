@@ -4,19 +4,19 @@
     "y": 123.153,
     "heading": "linear",
     "startDeg": 126.0,
-    "endDeg": 106.0,
+    "endDeg": 26.0,
     "locked": false
   },
   "lines": [
     {
       "id": "line-001",
-      "name": "1 Start \u2192 AprilTagPosition",
+      "name": "1 START_POSE -> LAUNCH_PRELOADS",
       "endPoint": {
-        "x": 94.0,
-        "y": 94.0,
+        "x": 89.0,
+        "y": 97.0,
         "heading": "linear",
         "startDeg": 126.0,
-        "endDeg": 106.0
+        "endDeg": 26.0
       },
       "controlPoints": [],
       "color": "#ffc516",
@@ -28,13 +28,13 @@
     },
     {
       "id": "line-002",
-      "name": "2 AprilTagPosition \u2192 LaunchPreloads",
+      "name": "2 LAUNCH_PRELOADS -> ALIGN_INTAKE1",
       "endPoint": {
-        "x": 89.0,
-        "y": 97.0,
+        "x": 94.568,
+        "y": 84.477,
         "heading": "linear",
-        "startDeg": 106.0,
-        "endDeg": 26.0
+        "startDeg": 26.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#5B9C9A",
@@ -46,12 +46,12 @@
     },
     {
       "id": "line-003",
-      "name": "3 LaunchPreloads \u2192 AlignIntake1",
+      "name": "3 ALIGN_INTAKE1 -> INTAKE_P11",
       "endPoint": {
-        "x": 94.568,
+        "x": 105.166,
         "y": 84.477,
         "heading": "linear",
-        "startDeg": 26.0,
+        "startDeg": 0.0,
         "endDeg": 0.0
       },
       "controlPoints": [],
@@ -64,9 +64,9 @@
     },
     {
       "id": "line-004",
-      "name": "4 AlignIntake1 \u2192 IntakePurple11",
+      "name": "4 INTAKE_P11 -> INTAKE_P12",
       "endPoint": {
-        "x": 105.166,
+        "x": 109.957,
         "y": 84.477,
         "heading": "linear",
         "startDeg": 0.0,
@@ -82,9 +82,9 @@
     },
     {
       "id": "line-005",
-      "name": "5 IntakePurple11 \u2192 IntakePurple12",
+      "name": "5 INTAKE_P12 -> INTAKE_G11",
       "endPoint": {
-        "x": 109.957,
+        "x": 117.976,
         "y": 84.477,
         "heading": "linear",
         "startDeg": 0.0,
@@ -100,13 +100,13 @@
     },
     {
       "id": "line-006",
-      "name": "6 IntakePurple12 \u2192 IntakeGreen11",
+      "name": "6 INTAKE_G11 -> LAUNCH_ROW1",
       "endPoint": {
-        "x": 117.976,
-        "y": 84.477,
+        "x": 92.0,
+        "y": 97.0,
         "heading": "linear",
         "startDeg": 0.0,
-        "endDeg": 0.0
+        "endDeg": 39.0
       },
       "controlPoints": [],
       "color": "#ff6b6b",
@@ -118,13 +118,13 @@
     },
     {
       "id": "line-007",
-      "name": "7 IntakeGreen11 \u2192 LaunchFirstRow",
+      "name": "7 LAUNCH_ROW1 -> ALIGN_INTAKE2",
       "endPoint": {
-        "x": 92.0,
-        "y": 97.0,
+        "x": 96.306,
+        "y": 62.928,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 39.0
+        "startDeg": 39.0,
+        "endDeg": 0.0
       },
       "controlPoints": [],
       "color": "#f97316",
@@ -136,12 +136,12 @@
     },
     {
       "id": "line-008",
-      "name": "8 LaunchFirstRow \u2192 AlignIntake2",
+      "name": "8 ALIGN_INTAKE2 -> INTAKE_P21",
       "endPoint": {
-        "x": 96.306,
+        "x": 102.973,
         "y": 62.928,
         "heading": "linear",
-        "startDeg": 39.0,
+        "startDeg": 0.0,
         "endDeg": 0.0
       },
       "controlPoints": [],
@@ -154,10 +154,10 @@
     },
     {
       "id": "line-009",
-      "name": "9 AlignIntake2 \u2192 IntakePurple21",
+      "name": "9 INTAKE_P21 -> INTAKE_G21",
       "endPoint": {
-        "x": 102.973,
-        "y": 62.928,
+        "x": 108.378,
+        "y": 60.928,
         "heading": "linear",
         "startDeg": 0.0,
         "endDeg": 0.0
@@ -172,9 +172,9 @@
     },
     {
       "id": "line-010",
-      "name": "10 IntakePurple21 \u2192 IntakeGreen21",
+      "name": "10 INTAKE_G21 -> INTAKE_P22",
       "endPoint": {
-        "x": 108.378,
+        "x": 116.59,
         "y": 60.928,
         "heading": "linear",
         "startDeg": 0.0,
@@ -190,13 +190,13 @@
     },
     {
       "id": "line-011",
-      "name": "11 IntakeGreen21 \u2192 IntakePurple22",
+      "name": "11 INTAKE_P22 -> LAUNCH_ROW2",
       "endPoint": {
-        "x": 116.59,
-        "y": 60.928,
+        "x": 89.0,
+        "y": 97.0,
         "heading": "linear",
         "startDeg": 0.0,
-        "endDeg": 0.0
+        "endDeg": 38.0
       },
       "controlPoints": [],
       "color": "#C9DB67",
@@ -208,25 +208,7 @@
     },
     {
       "id": "line-012",
-      "name": "12 IntakePurple22 \u2192 LaunchSecondRow",
-      "endPoint": {
-        "x": 89.0,
-        "y": 97.0,
-        "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 38.0
-      },
-      "controlPoints": [],
-      "color": "#60a5fa",
-      "locked": false,
-      "waitBeforeMs": 0,
-      "waitAfterMs": 0,
-      "waitBeforeName": "",
-      "waitAfterName": ""
-    },
-    {
-      "id": "line-013",
-      "name": "13 LaunchSecondRow \u2192 Park",
+      "name": "12 LAUNCH_ROW2 -> PARK",
       "endPoint": {
         "x": 110.432,
         "y": 75.475,
@@ -235,7 +217,7 @@
         "endDeg": 0.0
       },
       "controlPoints": [],
-      "color": "#ff6b6b",
+      "color": "#60a5fa",
       "locked": false,
       "waitBeforeMs": 0,
       "waitAfterMs": 0,
@@ -292,16 +274,12 @@
     {
       "kind": "path",
       "lineId": "line-012"
-    },
-    {
-      "kind": "path",
-      "lineId": "line-013"
     }
   ],
   "pathChains": [
     {
-      "id": "chain-Pedro Paths Red Close High",
-      "name": "Pedro Paths Red Close High",
+      "id": "chain-Mark2 Red Close Auto High",
+      "name": "Mark2 Red Close Auto High",
       "color": "#C9DB67",
       "lineIds": [
         "line-001",
@@ -315,11 +293,10 @@
         "line-009",
         "line-010",
         "line-011",
-        "line-012",
-        "line-013"
+        "line-012"
       ]
     }
   ],
   "version": "1.2.1",
-  "timestamp": "2026-06-02T21:26:40.213Z"
+  "timestamp": "2026-06-10T23:47:07.869Z"
 }

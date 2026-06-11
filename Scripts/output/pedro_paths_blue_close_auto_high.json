@@ -1,0 +1,197 @@
+﻿[
+    {
+        "name":  "1 APRILTAG_POSE_START -> APRILTAG_POSE_END",
+        "waypoints":  [
+                          {
+                              "y":  123.153,
+                              "heading":  54,
+                              "x":  20.461
+                          },
+                          {
+                              "y":  95.936,
+                              "heading":  74,
+                              "x":  47.099
+                          }
+                      ]
+    },
+    {
+        "name":  "2 APRILTAG_POSE_END -> LAUNCH_PRELOADS_POSE",
+        "waypoints":  [
+                          {
+                              "y":  95.936,
+                              "heading":  74,
+                              "x":  47.099
+                          },
+                          {
+                              "y":  99.989,
+                              "heading":  155,
+                              "x":  53.239
+                          }
+                      ]
+    },
+    {
+        "name":  "3 LAUNCH_PRELOADS_POSE -> ALIGN_INTAKE1_POSE",
+        "waypoints":  [
+                          {
+                              "y":  99.989,
+                              "heading":  155,
+                              "x":  53.239
+                          },
+                          {
+                              "y":  88.477,
+                              "heading":  180,
+                              "x":  44.432
+                          }
+                      ]
+    },
+    {
+        "name":  "4 ALIGN_INTAKE1_POSE -> INTAKE_P11_POSE",
+        "waypoints":  [
+                          {
+                              "y":  88.477,
+                              "heading":  180,
+                              "x":  44.432
+                          },
+                          {
+                              "y":  88.477,
+                              "heading":  180,
+                              "x":  37.834
+                          }
+                      ]
+    },
+    {
+        "name":  "5 INTAKE_P11_POSE -> INTAKE_P12_POSE",
+        "waypoints":  [
+                          {
+                              "y":  88.477,
+                              "heading":  180,
+                              "x":  37.834
+                          },
+                          {
+                              "y":  87.477,
+                              "heading":  180,
+                              "x":  32.043
+                          }
+                      ]
+    },
+    {
+        "name":  "6 INTAKE_P12_POSE -> INTAKE_G11_POSE",
+        "waypoints":  [
+                          {
+                              "y":  87.477,
+                              "heading":  180,
+                              "x":  32.043
+                          },
+                          {
+                              "y":  87.477,
+                              "heading":  180,
+                              "x":  27.024
+                          }
+                      ]
+    },
+    {
+        "name":  "7 INTAKE_G11_POSE -> LAUNCH_FIRST_ROW_POSE",
+        "waypoints":  [
+                          {
+                              "y":  87.477,
+                              "heading":  180,
+                              "x":  27.024
+                          },
+                          {
+                              "y":  98.182,
+                              "heading":  141,
+                              "x":  51.046
+                          }
+                      ]
+    },
+    {
+        "name":  "8 LAUNCH_FIRST_ROW_POSE -> ALIGN_INTAKE2_POSE",
+        "waypoints":  [
+                          {
+                              "y":  98.182,
+                              "heading":  141,
+                              "x":  51.046
+                          },
+                          {
+                              "y":  63.928,
+                              "heading":  180,
+                              "x":  46.694
+                          }
+                      ]
+    },
+    {
+        "name":  "9 ALIGN_INTAKE2_POSE -> INTAKE_P21_POSE",
+        "waypoints":  [
+                          {
+                              "y":  63.928,
+                              "heading":  180,
+                              "x":  46.694
+                          },
+                          {
+                              "y":  63.928,
+                              "heading":  180,
+                              "x":  38.027
+                          }
+                      ]
+    },
+    {
+        "name":  "10 INTAKE_P21_POSE -> INTAKE_G21_POSE",
+        "waypoints":  [
+                          {
+                              "y":  63.928,
+                              "heading":  180,
+                              "x":  38.027
+                          },
+                          {
+                              "y":  62.928,
+                              "heading":  180,
+                              "x":  32.622
+                          }
+                      ]
+    },
+    {
+        "name":  "11 INTAKE_G21_POSE -> INTAKE_P22_POSE",
+        "waypoints":  [
+                          {
+                              "y":  62.928,
+                              "heading":  180,
+                              "x":  32.622
+                          },
+                          {
+                              "y":  62.928,
+                              "heading":  180,
+                              "x":  27.41
+                          }
+                      ]
+    },
+    {
+        "name":  "12 INTAKE_P22_POSE -> LAUNCH_SECOND_ROW_POSE",
+        "waypoints":  [
+                          {
+                              "y":  62.928,
+                              "heading":  180,
+                              "x":  27.41
+                          },
+                          {
+                              "y":  98.182,
+                              "heading":  144,
+                              "x":  52.046
+                          }
+                      ]
+    },
+    {
+        "name":  "13 LAUNCH_SECOND_ROW_POSE -> PARK_POSE",
+        "waypoints":  [
+                          {
+                              "y":  98.182,
+                              "heading":  144,
+                              "x":  52.046
+                          },
+                          {
+                              "y":  75.475,
+                              "heading":  180,
+                              "x":  34.568
+                          }
+                      ]
+    }
+]

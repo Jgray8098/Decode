@@ -1,6 +1,6 @@
 [
   {
-    "name": "1 Start \u2192 LaunchPreloads",
+    "name": "1 Start -> LaunchPreloads",
     "waypoints": [
       {
         "x": 81.994,
@@ -15,7 +15,7 @@
     ]
   },
   {
-    "name": "2 LaunchPreloads \u2192 AlignIntake2",
+    "name": "2 LaunchPreloads -> AlignIntake2",
     "waypoints": [
       {
         "x": 84.848,
@@ -30,7 +30,7 @@
     ]
   },
   {
-    "name": "3 AlignIntake2 \u2192 IntakeGP",
+    "name": "3 AlignIntake2 -> IntakeGP",
     "waypoints": [
       {
         "x": 89.0,
@@ -45,7 +45,7 @@
     ]
   },
   {
-    "name": "4 IntakeGP \u2192 AlignIntake2_2",
+    "name": "4 IntakeGP -> AlignIntake2_2",
     "waypoints": [
       {
         "x": 126.546,
@@ -60,7 +60,7 @@
     ]
   },
   {
-    "name": "5 AlignIntake2_2 \u2192 AlignIntake2_3",
+    "name": "5 AlignIntake2_2 -> AlignIntake2_3",
     "waypoints": [
       {
         "x": 125.049,
@@ -75,7 +75,7 @@
     ]
   },
   {
-    "name": "6 AlignIntake2_3 \u2192 IntakePP",
+    "name": "6 AlignIntake2_3 -> IntakePP",
     "waypoints": [
       {
         "x": 125.031,
@@ -90,7 +90,7 @@
     ]
   },
   {
-    "name": "7 IntakePP \u2192 LaunchRow2",
+    "name": "7 IntakePP -> LaunchRow2",
     "waypoints": [
       {
         "x": 130.325,
@@ -105,7 +105,7 @@
     ]
   },
   {
-    "name": "8 LaunchRow2 \u2192 AlignIntake1",
+    "name": "8 LaunchRow2 -> AlignIntake1",
     "waypoints": [
       {
         "x": 93.0,
@@ -120,7 +120,7 @@
     ]
   },
   {
-    "name": "9 AlignIntake1 \u2192 IntakeP11",
+    "name": "9 AlignIntake1 -> IntakeP11",
     "waypoints": [
       {
         "x": 94.0,
@@ -135,7 +135,7 @@
     ]
   },
   {
-    "name": "10 IntakeP11 \u2192 IntakeP12",
+    "name": "10 IntakeP11 -> IntakeP12",
     "waypoints": [
       {
         "x": 106.796,
@@ -150,7 +150,7 @@
     ]
   },
   {
-    "name": "11 IntakeP12 \u2192 IntakeG11",
+    "name": "11 IntakeP12 -> IntakeG11",
     "waypoints": [
       {
         "x": 111.611,
@@ -165,7 +165,7 @@
     ]
   },
   {
-    "name": "12 IntakeG11 \u2192 LaunchRow1",
+    "name": "12 IntakeG11 -> LaunchRow1",
     "waypoints": [
       {
         "x": 116.207,
@@ -180,7 +180,7 @@
     ]
   },
   {
-    "name": "13 LaunchRow1 \u2192 Park",
+    "name": "13 LaunchRow1 -> Park",
     "waypoints": [
       {
         "x": 93.0,

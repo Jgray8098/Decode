@@ -1,22 +1,22 @@
 {
   "startPoint": {
-    "x": 81.994,
-    "y": 9.021,
+    "x": 20.461,
+    "y": 123.153,
     "heading": "linear",
-    "startDeg": 90.0,
-    "endDeg": 63.0,
+    "startDeg": 54.0,
+    "endDeg": 155.0,
     "locked": false
   },
   "lines": [
     {
       "id": "line-001",
-      "name": "1 Start \u2192 LaunchPreloads",
+      "name": "1 START_POSE -> LAUNCH_PRELOADS",
       "endPoint": {
-        "x": 84.848,
-        "y": 22.663,
+        "x": 53.239,
+        "y": 99.989,
         "heading": "linear",
-        "startDeg": 90.0,
-        "endDeg": 63.0
+        "startDeg": 54.0,
+        "endDeg": 155.0
       },
       "controlPoints": [],
       "color": "#ffc516",
@@ -28,13 +28,13 @@
     },
     {
       "id": "line-002",
-      "name": "2 LaunchPreloads \u2192 AlignIntake2",
+      "name": "2 LAUNCH_PRELOADS -> ALIGN_INTAKE1",
       "endPoint": {
-        "x": 89.0,
-        "y": 15.0,
+        "x": 44.432,
+        "y": 88.477,
         "heading": "linear",
-        "startDeg": 63.0,
-        "endDeg": 0.0
+        "startDeg": 155.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#5B9C9A",
@@ -46,13 +46,13 @@
     },
     {
       "id": "line-003",
-      "name": "3 AlignIntake2 \u2192 IntakeGP",
+      "name": "3 ALIGN_INTAKE1 -> INTAKE_P11",
       "endPoint": {
-        "x": 126.546,
-        "y": 15.0,
+        "x": 37.834,
+        "y": 88.477,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#857B75",
@@ -64,13 +64,13 @@
     },
     {
       "id": "line-004",
-      "name": "4 IntakeGP \u2192 AlignIntake2_2",
+      "name": "4 INTAKE_P11 -> INTAKE_P12",
       "endPoint": {
-        "x": 125.049,
-        "y": 16.227,
+        "x": 32.043,
+        "y": 87.477,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#C9DB67",
@@ -82,13 +82,13 @@
     },
     {
       "id": "line-005",
-      "name": "5 AlignIntake2_2 \u2192 AlignIntake2_3",
+      "name": "5 INTAKE_P12 -> INTAKE_G11",
       "endPoint": {
-        "x": 125.031,
-        "y": 12.018,
+        "x": 27.024,
+        "y": 87.477,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#60a5fa",
@@ -100,13 +100,13 @@
     },
     {
       "id": "line-006",
-      "name": "6 AlignIntake2_3 \u2192 IntakePP",
+      "name": "6 INTAKE_G11 -> LAUNCH_ROW1",
       "endPoint": {
-        "x": 130.325,
-        "y": 10.982,
+        "x": 51.046,
+        "y": 98.182,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 141.0
       },
       "controlPoints": [],
       "color": "#ff6b6b",
@@ -118,13 +118,13 @@
     },
     {
       "id": "line-007",
-      "name": "7 IntakePP \u2192 LaunchRow2",
+      "name": "7 LAUNCH_ROW1 -> ALIGN_INTAKE2",
       "endPoint": {
-        "x": 93.0,
-        "y": 21.0,
+        "x": 46.694,
+        "y": 63.928,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 71.0
+        "startDeg": 141.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#f97316",
@@ -136,13 +136,13 @@
     },
     {
       "id": "line-008",
-      "name": "8 LaunchRow2 \u2192 AlignIntake1",
+      "name": "8 ALIGN_INTAKE2 -> INTAKE_P21",
       "endPoint": {
-        "x": 94.0,
-        "y": 32.0,
+        "x": 38.027,
+        "y": 63.928,
         "heading": "linear",
-        "startDeg": 71.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#ffc516",
@@ -154,13 +154,13 @@
     },
     {
       "id": "line-009",
-      "name": "9 AlignIntake1 \u2192 IntakeP11",
+      "name": "9 INTAKE_P21 -> INTAKE_G21",
       "endPoint": {
-        "x": 106.796,
-        "y": 32.0,
+        "x": 32.622,
+        "y": 62.928,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#5B9C9A",
@@ -172,13 +172,13 @@
     },
     {
       "id": "line-010",
-      "name": "10 IntakeP11 \u2192 IntakeP12",
+      "name": "10 INTAKE_G21 -> INTAKE_P22",
       "endPoint": {
-        "x": 111.611,
-        "y": 34.0,
+        "x": 27.41,
+        "y": 62.928,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#857B75",
@@ -190,13 +190,13 @@
     },
     {
       "id": "line-011",
-      "name": "11 IntakeP12 \u2192 IntakeG11",
+      "name": "11 INTAKE_P22 -> LAUNCH_ROW2",
       "endPoint": {
-        "x": 116.207,
-        "y": 34.0,
+        "x": 52.046,
+        "y": 98.182,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 0.0
+        "startDeg": 180.0,
+        "endDeg": 144.0
       },
       "controlPoints": [],
       "color": "#C9DB67",
@@ -208,34 +208,16 @@
     },
     {
       "id": "line-012",
-      "name": "12 IntakeG11 \u2192 LaunchRow1",
+      "name": "12 LAUNCH_ROW2 -> PARK",
       "endPoint": {
-        "x": 93.0,
-        "y": 21.0,
+        "x": 34.568,
+        "y": 75.475,
         "heading": "linear",
-        "startDeg": 0.0,
-        "endDeg": 68.0
+        "startDeg": 144.0,
+        "endDeg": 180.0
       },
       "controlPoints": [],
       "color": "#60a5fa",
-      "locked": false,
-      "waitBeforeMs": 0,
-      "waitAfterMs": 0,
-      "waitBeforeName": "",
-      "waitAfterName": ""
-    },
-    {
-      "id": "line-013",
-      "name": "13 LaunchRow1 \u2192 Park",
-      "endPoint": {
-        "x": 105.19,
-        "y": 15.074,
-        "heading": "linear",
-        "startDeg": 68.0,
-        "endDeg": 90.0
-      },
-      "controlPoints": [],
-      "color": "#ff6b6b",
       "locked": false,
       "waitBeforeMs": 0,
       "waitAfterMs": 0,
@@ -292,16 +274,12 @@
     {
       "kind": "path",
       "lineId": "line-012"
-    },
-    {
-      "kind": "path",
-      "lineId": "line-013"
     }
   ],
   "pathChains": [
     {
-      "id": "chain-Pedro Paths Red Far",
-      "name": "Pedro Paths Red Far",
+      "id": "chain-Mark2 Blue Close Auto High",
+      "name": "Mark2 Blue Close Auto High",
       "color": "#C9DB67",
       "lineIds": [
         "line-001",
@@ -315,11 +293,10 @@
         "line-009",
         "line-010",
         "line-011",
-        "line-012",
-        "line-013"
+        "line-012"
       ]
     }
   ],
   "version": "1.2.1",
-  "timestamp": "2026-06-02T21:13:31.739Z"
+  "timestamp": "2026-06-10T23:47:07.864Z"
 }
