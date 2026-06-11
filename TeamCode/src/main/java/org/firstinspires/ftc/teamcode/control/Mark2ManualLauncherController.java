@@ -43,7 +43,7 @@ public class Mark2ManualLauncherController {
 
     private boolean prevDpadUp = false;
     private boolean prevDpadDown = false;
-    private boolean prevB = false;
+    private boolean prevLaunchFeed = false;
     private boolean prevY = false;
 
     public Mark2ManualLauncherController(Mark2Launcher launcher) {
@@ -71,7 +71,16 @@ public class Mark2ManualLauncherController {
     }
 
     public void update(Gamepad operator, double dtSec, boolean manualAimEnabled) {
-        update(operator, dtSec, true, false, manualAimEnabled);
+        update(operator, dtSec, true, false, manualAimEnabled, operator.b);
+    }
+
+    public void update(
+            Gamepad operator,
+            double dtSec,
+            boolean manualAimEnabled,
+            boolean launchFeedPressed
+    ) {
+        update(operator, dtSec, true, false, manualAimEnabled, launchFeedPressed);
     }
 
     public void updateWithExternalLauncherSetpoint(
@@ -88,7 +97,17 @@ public class Mark2ManualLauncherController {
             boolean externalLauncherReady,
             boolean manualAimEnabled
     ) {
-        update(operator, dtSec, false, externalLauncherReady, manualAimEnabled);
+        update(operator, dtSec, false, externalLauncherReady, manualAimEnabled, operator.b);
+    }
+
+    public void updateWithExternalLauncherSetpoint(
+            Gamepad operator,
+            double dtSec,
+            boolean externalLauncherReady,
+            boolean manualAimEnabled,
+            boolean launchFeedPressed
+    ) {
+        update(operator, dtSec, false, externalLauncherReady, manualAimEnabled, launchFeedPressed);
     }
 
     private void update(
@@ -96,11 +115,11 @@ public class Mark2ManualLauncherController {
             double dtSec,
             boolean manageLauncherSetpoint,
             boolean externalLauncherReady,
-            boolean manualAimEnabled
+            boolean manualAimEnabled,
+            boolean launchFeedPressed
     ) {
         boolean dpadUp = operator.dpad_up;
         boolean dpadDown = operator.dpad_down;
-        boolean b = operator.b;
         boolean y = operator.y;
 
         if (manageLauncherSetpoint && dpadUp && !prevDpadUp) {
@@ -111,7 +130,7 @@ public class Mark2ManualLauncherController {
             toggleZone(ShotZone.FAR);
         }
 
-        if (intake != null && b && !prevB) {
+        if (intake != null && launchFeedPressed && !prevLaunchFeed) {
             if (launchSequence.startIfFlywheelRunning(flywheelRunning || externalLauncherReady)) {
                 feederServoPos = Mark2Launcher.FEEDER_SERVO_FEED_POSITION;
             }
@@ -124,7 +143,7 @@ public class Mark2ManualLauncherController {
 
         prevDpadUp = dpadUp;
         prevDpadDown = dpadDown;
-        prevB = b;
+        prevLaunchFeed = launchFeedPressed;
         prevY = y;
 
         if (manageLauncherSetpoint) {
