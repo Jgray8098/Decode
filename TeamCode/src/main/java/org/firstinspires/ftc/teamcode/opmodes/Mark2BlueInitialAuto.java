@@ -1,6 +1,9 @@
 package org.firstinspires.ftc.teamcode.opmodes;
 
+import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
+import com.pedropathing.paths.PathChain;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
 /**
@@ -20,13 +23,13 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  * 13.  Drive to FinalFirePosition                        → shoot close-floor pickup
  *
  * Navigation uses the Mark2AutoBase Pinpoint PID (navigate / navigateWithIntake).
- * Pose constants below come from the javafragment; update by re-running the script
- * and replacing the marked section.
+ * The Paths inner class uses Pedro Pathing path-following and is included for
+ * future migration; it is not called by runPath() in this OpMode.
  *
- * ── Tuning checklist ─────────────────────────────────────────────────────────
- *  • LAUNCH_DISTANCE_MAIN  — measure FireLocation → goal (inches)
- *  • LAUNCH_DISTANCE_FINAL — measure FinalFirePosition → goal (inches)
- *  • OUTTAKE_REVERSE_S     — inherited from Mark2AutoBase; tune for game element clearance
+ * Tuning checklist:
+ *   LAUNCH_DISTANCE_MAIN  — measure FireLocation → goal (inches)
+ *   LAUNCH_DISTANCE_FINAL — measure FinalFirePosition → goal (inches)
+ *   OUTTAKE_REVERSE_S     — inherited from Mark2AutoBase
  */
 @Autonomous(name = "Mark2 Blue Initial Auto", group = "Mark2")
 public class Mark2BlueInitialAuto extends Mark2AutoBase {
@@ -37,10 +40,7 @@ public class Mark2BlueInitialAuto extends Mark2AutoBase {
     private static final double START_ROT = 90.0;    // degrees — pp startPoint.startDeg
 
     // ── Launch distances (inches) — TUNE to actual measured goal distances ─────
-    /** Distance from FireLocation to the scoring goal.  Tune on-field. */
     private static final double LAUNCH_DISTANCE_MAIN  = 48.0; // TUNE
-
-    /** Distance from FinalFirePosition to the scoring goal.  Tune on-field. */
     private static final double LAUNCH_DISTANCE_FINAL = 36.0; // TUNE
 
     // =========================================================================
@@ -50,70 +50,146 @@ public class Mark2BlueInitialAuto extends Mark2AutoBase {
     //  Source file  : Scripts\Mark2BlueInitialAuto.pp
     //  Fragment file: Scripts\InputAndOutput\Mark2BlueInitialAuto_points.javafragment
     //
-    //  HOW TO UPDATE when paths change in the Pedro visualizer:
-    //    1. Export updated paths from the Pedro visualizer into
+    //  HOW TO UPDATE when paths change:
+    //    1. Export updated paths from the Pedro visualizer to
     //         Scripts\Mark2BlueInitialAuto.pp
     //       OR re-generate from Java using Convert-JavaToPedroPp.ps1.
     //    2. Run from the Scripts\ directory:
     //         .\Convert-PedroToJavaPoints.ps1 .\Mark2BlueInitialAuto.pp
     //    3. Open Scripts\InputAndOutput\Mark2BlueInitialAuto_points.javafragment
-    //    4. Copy the Pose constant declarations (lines beginning with
-    //       "private static final Pose") and paste them, replacing the
-    //       Pose constants between the START and END markers here.
-    //
-    //  NOTE: Only the Pose constants are used by navigate() below.
-    //        The Paths inner class (PathChain builder calls) is kept in the
-    //        .javafragment file for future migration to Pedro Pathing path
-    //        following.  It requires Follower / BezierLine / PathChain imports
-    //        and is not compiled here to avoid unused-import warnings.
+    //    4. Select all and paste, replacing everything between START and END.
     // =========================================================================
 
-    // ── Pose constants (paste updated fragment here) ──────────────────────────
-    // Poses whose names end in _2/_4/_6/_8 are Pedro Pathing "departure"
-    // heading variants kept for full round-trip fidelity with the .pp file.
-    // They are not consumed by navigate() in this OpMode but are retained so
-    // the paste section stays in sync with the .javafragment output.
-    @SuppressWarnings("unused")
-    private static final Pose STARTINGPOSITION_POSE    = new Pose(19.450, 119.623, Math.toRadians(323.000));
-    private static final Pose FIRELOCATION_POSE        = new Pose(55.393,  85.593, Math.toRadians(310.000));
+    private static final Pose STARTINGPOSITION_POSE = new Pose(19.450, 119.623, Math.toRadians(323.000));
+    private static final Pose FIRELOCATION_POSE = new Pose(55.393, 85.593, Math.toRadians(310.000));
+    private static final Pose INTAKEFLOORMIDDLE_POSE = new Pose(22.913, 58.959, Math.toRadians(310.000));
+    private static final Pose INTAKEFLOORMIDDLE_POSE_2 = new Pose(22.913, 58.959, Math.toRadians(180.000));
+    private static final Pose FIRELOCATION_POSE_2 = new Pose(55.238, 85.504, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE = new Pose(13.642, 59.503, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_2 = new Pose(13.642, 59.503, Math.toRadians(155.000));
+    private static final Pose FIRELOCATION_POSE_3 = new Pose(55.492, 85.180, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_3 = new Pose(13.656, 59.517, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_4 = new Pose(13.656, 59.517, Math.toRadians(155.000));
+    private static final Pose FIRELOCATION_POSE_4 = new Pose(55.333, 85.523, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_5 = new Pose(13.693, 59.558, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_6 = new Pose(13.693, 59.558, Math.toRadians(155.000));
+    private static final Pose FIRELOCATION_POSE_5 = new Pose(55.297, 85.502, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_7 = new Pose(13.833, 59.559, Math.toRadians(220.000));
+    private static final Pose GATELOAD_POSE_8 = new Pose(13.833, 59.559, Math.toRadians(155.000));
+    private static final Pose FIRELOCATION_POSE_6 = new Pose(55.436, 85.618, Math.toRadians(220.000));
+    private static final Pose FIRELOCATION_POSE_7 = new Pose(55.436, 85.618, Math.toRadians(180.000));
+    private static final Pose INTAKEFLOORCLOSE_POSE = new Pose(23.797, 83.290, Math.toRadians(180.000));
+    private static final Pose FINALFIREPOSITION_POSE = new Pose(56.682, 103.156, Math.toRadians(220.000));
 
-    // Middle floor intake
-    private static final Pose INTAKEFLOORMIDDLE_POSE   = new Pose(22.913,  58.959, Math.toRadians(310.000));
-    @SuppressWarnings("unused")
-    private static final Pose INTAKEFLOORMIDDLE_POSE_2 = new Pose(22.913,  58.959, Math.toRadians(180.000));
+    public static class Paths {
+        public PathChain startingpositionToFirelocation;
+        public PathChain firelocationToIntakefloormiddle;
+        public PathChain intakefloormiddlePose2ToFirelocationPose2;
+        public PathChain firelocationPose2ToGateload;
+        public PathChain gateloadPose2ToFirelocationPose3;
+        public PathChain firelocationPose3ToGateloadPose3;
+        public PathChain gateloadPose4ToFirelocationPose4;
+        public PathChain firelocationPose4ToGateloadPose5;
+        public PathChain gateloadPose6ToFirelocationPose5;
+        public PathChain firelocationPose5ToGateloadPose7;
+        public PathChain gateloadPose8ToFirelocationPose6;
+        public PathChain firelocationPose7ToIntakefloorclose;
+        public PathChain intakefloorcloseToFinalfireposition;
 
-    // Return from middle-floor pickup → fire
-    private static final Pose FIRELOCATION_POSE_2      = new Pose(55.238,  85.504, Math.toRadians(220.000));
+        public Paths(Follower follower) {
+            // StartingPosition to FireLocation
+            startingpositionToFirelocation = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(STARTINGPOSITION_POSE, FIRELOCATION_POSE))
+                    .setLinearHeadingInterpolation(STARTINGPOSITION_POSE.getHeading(), FIRELOCATION_POSE.getHeading())
+                    .build();
 
-    // Gate-load cycle 1
-    private static final Pose GATELOAD_POSE            = new Pose(13.642,  59.503, Math.toRadians(220.000));
-    @SuppressWarnings("unused")
-    private static final Pose GATELOAD_POSE_2          = new Pose(13.642,  59.503, Math.toRadians(155.000));
-    private static final Pose FIRELOCATION_POSE_3      = new Pose(55.492,  85.180, Math.toRadians(220.000));
+            // FIreLocation to IntakeFloorMiddle
+            firelocationToIntakefloormiddle = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(FIRELOCATION_POSE, INTAKEFLOORMIDDLE_POSE))
+                    .setLinearHeadingInterpolation(FIRELOCATION_POSE.getHeading(), INTAKEFLOORMIDDLE_POSE.getHeading())
+                    .build();
 
-    // Gate-load cycle 2
-    private static final Pose GATELOAD_POSE_3          = new Pose(13.656,  59.517, Math.toRadians(220.000));
-    @SuppressWarnings("unused")
-    private static final Pose GATELOAD_POSE_4          = new Pose(13.656,  59.517, Math.toRadians(155.000));
-    private static final Pose FIRELOCATION_POSE_4      = new Pose(55.333,  85.523, Math.toRadians(220.000));
+            // IntakeFloorMiddle to FireLocation
+            intakefloormiddlePose2ToFirelocationPose2 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(INTAKEFLOORMIDDLE_POSE_2, FIRELOCATION_POSE_2))
+                    .setLinearHeadingInterpolation(INTAKEFLOORMIDDLE_POSE_2.getHeading(), FIRELOCATION_POSE_2.getHeading())
+                    .build();
 
-    // Gate-load cycle 3
-    private static final Pose GATELOAD_POSE_5          = new Pose(13.693,  59.558, Math.toRadians(220.000));
-    @SuppressWarnings("unused")
-    private static final Pose GATELOAD_POSE_6          = new Pose(13.693,  59.558, Math.toRadians(155.000));
-    private static final Pose FIRELOCATION_POSE_5      = new Pose(55.297,  85.502, Math.toRadians(220.000));
+            // FIreLocation to GateLoad
+            firelocationPose2ToGateload = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(FIRELOCATION_POSE_2, GATELOAD_POSE))
+                    .setLinearHeadingInterpolation(FIRELOCATION_POSE_2.getHeading(), GATELOAD_POSE.getHeading())
+                    .build();
 
-    // Gate-load cycle 4
-    private static final Pose GATELOAD_POSE_7          = new Pose(13.833,  59.559, Math.toRadians(220.000));
-    @SuppressWarnings("unused")
-    private static final Pose GATELOAD_POSE_8          = new Pose(13.833,  59.559, Math.toRadians(155.000));
-    private static final Pose FIRELOCATION_POSE_6      = new Pose(55.436,  85.618, Math.toRadians(220.000));
+            // GateLoad to FireLocation
+            gateloadPose2ToFirelocationPose3 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(GATELOAD_POSE_2, FIRELOCATION_POSE_3))
+                    .setLinearHeadingInterpolation(GATELOAD_POSE_2.getHeading(), FIRELOCATION_POSE_3.getHeading())
+                    .build();
 
-    // Close-floor intake and final shot
-    @SuppressWarnings("unused")
-    private static final Pose FIRELOCATION_POSE_7      = new Pose(55.436,  85.618, Math.toRadians(180.000));
-    private static final Pose INTAKEFLOORCLOSE_POSE     = new Pose(23.797,  83.290, Math.toRadians(180.000));
-    private static final Pose FINALFIREPOSITION_POSE    = new Pose(56.682, 103.156, Math.toRadians(220.000));
+            // FireLocation to GateLoad
+            firelocationPose3ToGateloadPose3 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(FIRELOCATION_POSE_3, GATELOAD_POSE_3))
+                    .setLinearHeadingInterpolation(FIRELOCATION_POSE_3.getHeading(), GATELOAD_POSE_3.getHeading())
+                    .build();
+
+            // GateLoad to FireLocation
+            gateloadPose4ToFirelocationPose4 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(GATELOAD_POSE_4, FIRELOCATION_POSE_4))
+                    .setLinearHeadingInterpolation(GATELOAD_POSE_4.getHeading(), FIRELOCATION_POSE_4.getHeading())
+                    .build();
+
+            // FireLocation to GateLoad
+            firelocationPose4ToGateloadPose5 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(FIRELOCATION_POSE_4, GATELOAD_POSE_5))
+                    .setLinearHeadingInterpolation(FIRELOCATION_POSE_4.getHeading(), GATELOAD_POSE_5.getHeading())
+                    .build();
+
+            // GateLoad to FireLocation
+            gateloadPose6ToFirelocationPose5 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(GATELOAD_POSE_6, FIRELOCATION_POSE_5))
+                    .setLinearHeadingInterpolation(GATELOAD_POSE_6.getHeading(), FIRELOCATION_POSE_5.getHeading())
+                    .build();
+
+            // FireLocation to GateLoad
+            firelocationPose5ToGateloadPose7 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(FIRELOCATION_POSE_5, GATELOAD_POSE_7))
+                    .setLinearHeadingInterpolation(FIRELOCATION_POSE_5.getHeading(), GATELOAD_POSE_7.getHeading())
+                    .build();
+
+            // GateLoad to FireLocation
+            gateloadPose8ToFirelocationPose6 = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(GATELOAD_POSE_8, FIRELOCATION_POSE_6))
+                    .setLinearHeadingInterpolation(GATELOAD_POSE_8.getHeading(), FIRELOCATION_POSE_6.getHeading())
+                    .build();
+
+            // FIreLocation to IntakeFloorClose
+            firelocationPose7ToIntakefloorclose = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(FIRELOCATION_POSE_7, INTAKEFLOORCLOSE_POSE))
+                    .setLinearHeadingInterpolation(FIRELOCATION_POSE_7.getHeading(), INTAKEFLOORCLOSE_POSE.getHeading())
+                    .build();
+
+            // IntakeFloorClose to FinalFirePosition
+            intakefloorcloseToFinalfireposition = follower
+                    .pathBuilder()
+                    .addPath(new BezierLine(INTAKEFLOORCLOSE_POSE, FINALFIREPOSITION_POSE))
+                    .setLinearHeadingInterpolation(INTAKEFLOORCLOSE_POSE.getHeading(), FINALFIREPOSITION_POSE.getHeading())
+                    .build();
+
+        }
+    }
 
     // =========================================================================
     // >>>  JAVAFRAGMENT PASTE SECTION — END  <<<
@@ -129,7 +205,7 @@ public class Mark2BlueInitialAuto extends Mark2AutoBase {
 
         telemetry.addLine("Mark2 Blue Initial Auto — Ready");
         telemetry.addData("Start pose",
-                String.format("(%.2f, %.2f)  %.0f°", START_X, START_Y, START_ROT));
+                String.format("(%.2f, %.2f)  %.0f deg", START_X, START_Y, START_ROT));
         telemetry.addData("Launch dist main  (in)", LAUNCH_DISTANCE_MAIN);
         telemetry.addData("Launch dist final (in)", LAUNCH_DISTANCE_FINAL);
         telemetry.update();
@@ -149,8 +225,8 @@ public class Mark2BlueInitialAuto extends Mark2AutoBase {
         shootFrom(LAUNCH_DISTANCE_MAIN);
 
         // ── 2. Intake sweep — middle floor ─────────────────────────────────────
-        //   Intake spins up while the robot drives to IntakeFloorMiddle,
-        //   collecting game elements along the tangential sweep path.
+        //   Intake spins up while driving to IntakeFloorMiddle to collect
+        //   game elements along the tangential sweep path.
         currentPhase = "Intake sweep - middle floor";
         navigateWithIntake(INTAKEFLOORMIDDLE_POSE);
 
@@ -164,58 +240,50 @@ public class Mark2BlueInitialAuto extends Mark2AutoBase {
         shootFrom(LAUNCH_DISTANCE_MAIN);
 
         // ── 4–11. Gate-load cycles ─────────────────────────────────────────────
-        //   The robot makes four trips to the GateLoad position to collect
-        //   additional game elements, returning to FireLocation to shoot
-        //   after each pickup run.
-        //
-        //   Intake is active on the inbound (to-gate) leg.
-        //   startReverseFor() clears the intake path on the return leg
-        //   (timer ticks concurrently inside navigate()).
+        //   Four trips to GateLoad to collect additional game elements.
+        //   Intake is active on every inbound (to-gate) leg.
+        //   startReverseFor() clears the intake path concurrently with the
+        //   return drive leg (timer ticks inside navigate()).
 
-        // ── Gate cycle 1 ───────────────────────────────────────────────────────
+        // Gate cycle 1
         currentPhase = "Gate cycle 1 - collect";
         navigateWithIntake(GATELOAD_POSE);
         startReverseFor(OUTTAKE_REVERSE_S);
-
         currentPhase = "Gate cycle 1 - fire";
         navigate(FIRELOCATION_POSE_3);
         shootFrom(LAUNCH_DISTANCE_MAIN);
 
-        // ── Gate cycle 2 ───────────────────────────────────────────────────────
+        // Gate cycle 2
         currentPhase = "Gate cycle 2 - collect";
         navigateWithIntake(GATELOAD_POSE_3);
         startReverseFor(OUTTAKE_REVERSE_S);
-
         currentPhase = "Gate cycle 2 - fire";
         navigate(FIRELOCATION_POSE_4);
         shootFrom(LAUNCH_DISTANCE_MAIN);
 
-        // ── Gate cycle 3 ───────────────────────────────────────────────────────
+        // Gate cycle 3
         currentPhase = "Gate cycle 3 - collect";
         navigateWithIntake(GATELOAD_POSE_5);
         startReverseFor(OUTTAKE_REVERSE_S);
-
         currentPhase = "Gate cycle 3 - fire";
         navigate(FIRELOCATION_POSE_5);
         shootFrom(LAUNCH_DISTANCE_MAIN);
 
-        // ── Gate cycle 4 ───────────────────────────────────────────────────────
+        // Gate cycle 4
         currentPhase = "Gate cycle 4 - collect";
         navigateWithIntake(GATELOAD_POSE_7);
         startReverseFor(OUTTAKE_REVERSE_S);
-
         currentPhase = "Gate cycle 4 - fire";
         navigate(FIRELOCATION_POSE_6);
         shootFrom(LAUNCH_DISTANCE_MAIN);
 
         // ── 12. Intake sweep — close floor ─────────────────────────────────────
-        //   A short linear sweep picks up game elements near the close wall.
+        //   Short linear sweep picks up game elements near the close wall.
         currentPhase = "Intake sweep - close floor";
         navigateWithIntake(INTAKEFLOORCLOSE_POSE);
         startReverseFor(OUTTAKE_REVERSE_S);
 
         // ── 13. Final fire position ────────────────────────────────────────────
-        //   Drive to FinalFirePosition and expend remaining game elements.
         currentPhase = "Final fire position";
         navigate(FINALFIREPOSITION_POSE);
         shootFrom(LAUNCH_DISTANCE_FINAL);
@@ -228,23 +296,13 @@ public class Mark2BlueInitialAuto extends Mark2AutoBase {
     // Pose-based navigation helpers
     // =========================================================================
 
-    /**
-     * Navigate to a Pedro Pathing {@link Pose}, delegating to
-     * {@link #navigate(double, double, double)} in {@link Mark2AutoBase}.
-     * Heading is converted from radians to degrees.
-     */
+    /** Navigate to a Pedro Pathing {@link Pose}; heading converted radians → degrees. */
     private void navigate(Pose pose) {
         navigate(pose.getX(), pose.getY(), Math.toDegrees(pose.getHeading()));
     }
 
-    /**
-     * Navigate to a Pedro Pathing {@link Pose} with the intake running,
-     * delegating to {@link #navigateWithIntake(double, double, double)}.
-     * Heading is converted from radians to degrees.
-     */
+    /** Navigate to a Pedro Pathing {@link Pose} with the intake running. */
     private void navigateWithIntake(Pose pose) {
         navigateWithIntake(pose.getX(), pose.getY(), Math.toDegrees(pose.getHeading()));
     }
 }
-
-
