@@ -14,8 +14,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 public class Mark2ManualLauncherController {
 
     private enum ShotZone {
-        CLOSE("CLOSE", 2500.0, 0.70),
-        FAR("FAR", 3200.0, 0.70);
+        CLOSE("CLOSE", 2450.0, 0.60),
+        FAR("FAR", 3250.0, 0.80);
 
         final String label;
         final double rpm;
@@ -40,6 +40,7 @@ public class Mark2ManualLauncherController {
     private double targetRpmCommand = 0.0;
     private ShotZone selectedZone = ShotZone.CLOSE;
     private boolean flywheelRunning = false;
+    private boolean resetBeamBreakOnNextForwardIntake = false;
 
     private boolean prevDpadUp = false;
     private boolean prevDpadDown = false;
@@ -121,6 +122,7 @@ public class Mark2ManualLauncherController {
         boolean dpadUp = operator.dpad_up;
         boolean dpadDown = operator.dpad_down;
         boolean y = operator.y;
+        boolean yPressed = y && !prevY;
 
         if (manageLauncherSetpoint && dpadUp && !prevDpadUp) {
             toggleZone(ShotZone.CLOSE);
@@ -133,10 +135,11 @@ public class Mark2ManualLauncherController {
         if (intake != null && launchFeedPressed && !prevLaunchFeed) {
             if (launchSequence.startIfFlywheelRunning(flywheelRunning || externalLauncherReady)) {
                 feederServoPos = Mark2Launcher.FEEDER_SERVO_FEED_POSITION;
+                resetBeamBreakOnNextForwardIntake = true;
             }
         }
 
-        if (intake != null && y && !prevY) {
+        if (intake != null && yPressed) {
             launchSequence.resetFeeder();
             feederServoPos = Mark2Launcher.FEEDER_SERVO_IDLE_POSITION;
         }
@@ -159,9 +162,15 @@ public class Mark2ManualLauncherController {
 
         if (intake != null && !launchSequence.isActive()) {
             if (operator.y) {
-                intake.PickUpDifferential();
+                if (resetBeamBreakOnNextForwardIntake) {
+                    intake.resetBeamBreakBallLatch();
+                    resetBeamBreakOnNextForwardIntake = false;
+                }
+                intake.PickUpDifferential(dtSec);
             } else if (operator.x) {
                 intake.ReverseArm();
+            } else if (intake.isBeamBreakSeatDelayActive()) {
+                intake.ContinueBeamBreakSeatDelay(dtSec);
             } else {
                 intake.HoldPosition();
             }
@@ -171,6 +180,7 @@ public class Mark2ManualLauncherController {
     public void stop() {
         targetRpmCommand = 0.0;
         flywheelRunning = false;
+        resetBeamBreakOnNextForwardIntake = false;
         if (launchSequence.isActive()) {
             launchSequence.cancel();
             feederServoPos = Mark2Launcher.FEEDER_SERVO_IDLE_POSITION;
@@ -216,6 +226,10 @@ public class Mark2ManualLauncherController {
 
     public boolean isLaunchSequenceRunningIntake() {
         return launchSequence.isRunningIntake();
+    }
+
+    public boolean isBeamBreakResetPending() {
+        return resetBeamBreakOnNextForwardIntake;
     }
 
     private void toggleZone(ShotZone zone) {

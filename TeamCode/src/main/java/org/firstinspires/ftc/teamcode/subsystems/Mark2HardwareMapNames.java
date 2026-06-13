@@ -41,6 +41,7 @@ public final class Mark2HardwareMapNames {
     public static final String INTAKE_MOTOR_TWO  = "IntakeMotorTwo"; // Expansion Hub
     public static final String INTAKE_SERVO_LEFT      = "IntakeServoLeft"; //Control Hub Servo Port 0
     public static final String INTAKE_SERVO_RIGHT = "IntakeServoRight"; //Expansion Hub Servo Port 5
+    public static final String BEAM_BREAK_SENSOR = "BeamBreakSensor";
 
     // ── Launcher ──────────────────────────────────────────────────────────────
     public static final String LAUNCHER_MOTOR_ONE  = "LauncherMotorOne"; // Right Motor, Control Hub Port 2
