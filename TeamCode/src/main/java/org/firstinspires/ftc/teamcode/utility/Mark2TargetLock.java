@@ -95,6 +95,13 @@ public class Mark2TargetLock {
         return clamp(Math.toDegrees(relativeTurretRad), config.turretMinDeg, config.turretMaxDeg);
     }
 
+    public double computeDistanceToGoalInches(Pose2D robotPose, Alliance alliance) {
+        FieldPoint goal = getGoal(alliance);
+        double dx = goal.xInches - robotPose.getX(DistanceUnit.INCH);
+        double dy = goal.yInches - robotPose.getY(DistanceUnit.INCH);
+        return Math.hypot(dx, dy);
+    }
+
     public double computeAimServoPosition(Pose2D robotPose, Alliance alliance) {
         return turretDegToServoPosition(computeDesiredTurretDeg(robotPose, alliance));
     }

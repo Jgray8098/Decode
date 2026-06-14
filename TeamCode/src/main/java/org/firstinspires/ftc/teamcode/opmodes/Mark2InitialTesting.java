@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
-import org.firstinspires.ftc.teamcode.control.Mark2ManualLauncherController;
+import org.firstinspires.ftc.teamcode.control.Mark2LaunchSequence;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
@@ -49,21 +49,22 @@ import java.util.Locale;
  *  Gamepad 2  (Intake + Launcher + Turret Aim)
  *  ┌─────────────────────────────────────────────────────────────────────────┐
  *  │  INTAKE                                                                 │
- *  │    Y  (hold)        →  intake forward (PickUp)                          │
+ *  │    Y  (press/hold)  →  gate idle + intake forward (PickUp)              │
  *  │    A  (hold)        →  intake reverse                                   │
  *  │    (neither)        →  intake stopped                                   │
  *  │    LB  press        →  intake servos position  − 0.02  (nudge down)     │
  *  │    RB  press        →  intake servos position  + 0.02  (nudge up)       │
  *  │                                                                         │
  *  │  LAUNCHER MOTORS                                                        │
- *  │    X press                   →  select CLOSE zone (2000 RPM, hood 0.20) │
- *  │    B press                   →  select FAR zone (2800 RPM, hood 0.70)   │
- *  │    Right trigger > 0.5 hold  →  spin motors at selected zone RPM        │
- *  │    (trigger released)           →  motors stop                          │
+ *  │    X press                   →  nudge target RPM down by 50             │
+ *  │    B press                   →  nudge target RPM up by 50               │
+ *  │    Right trigger press       →  toggle motors on/off                    │
+ *  │    (turning on)                 →  reset target to 1000 RPM             │
+ *  │    Left trigger press        →  run launch sequence if motors are on    │
  *  │                                                                         │
  *  │  LAUNCHER SERVOS                                                        │
  *  │    Dpad Up/Down         →  hood servo nudge                             │
- *  │    Dpad Right/Left      →  gate servos nudge                            │
+ *  │    Gate servos          →  controlled by launch sequence + Y reset      │
  *  │                                                                         │
  *  │  TURRET AIM                                                             │
  *  │    Left stick X         →  aim servos position                          │
@@ -71,18 +72,18 @@ import java.util.Locale;
  *  └─────────────────────────────────────────────────────────────────────────┘
  *
  * ── TUNING WORKFLOW ──────────────────────────────────────────────────────────
- *  1. Use X/B to select close/far launcher presets, then hold right trigger.
+ *  1. Use right trigger to toggle motors on at 1000 RPM, then X/B to nudge RPM.
+ *     Press left trigger to run the launch sequence once flywheels are on.
  *  2. Use LB/RB to find intake servo positions.
  *  3. Use Dpad Up/Down to find hood servo positions.
- *  4. Use Dpad Left/Right to find gate servo positions.
- *  5. Use GP2 left stick X to verify turret aim servo travel.
+ *  4. Use GP2 left stick X to verify turret aim servo travel.
  */
 @TeleOp(name = "Mark2InitialTesting", group = "Test")
 public class Mark2InitialTesting extends OpMode {
 
     // ── Subsystems ────────────────────────────────────────────────────────────
     private Mark2Launcher launcher;
-    private Mark2ManualLauncherController manualLauncher;
+    private Mark2LaunchSequence launchSequence;
     private Mark2Intake intake;
     private Mark2Drivetrain drivetrain;
 
@@ -92,11 +93,17 @@ public class Mark2InitialTesting extends OpMode {
     // ── Test constants ────────────────────────────────────────────────────────
     /** How much a single bumper or dpad press shifts a servo position. */
     private static final double SERVO_NUDGE_STEP = 0.02;
+    /** Launcher RPM change per X/B press. */
+    private static final double RPM_NUDGE_STEP = 50.0;
+    /** RPM used whenever GP2 right trigger turns the flywheels on. */
+    private static final double LAUNCHER_SPINUP_RPM = 1000.0;
     /** Safe centered position used during initial bring-up. */
     private static final double SERVO_CENTER_POS = 0.50;
     // ── Servo position tracking ───────────────────────────────────────────────
     private double intakeServoPos = SERVO_CENTER_POS;
     private double hoodServoPos = Mark2Launcher.clipHoodPosition(SERVO_CENTER_POS);
+    private double launcherTargetRpm = LAUNCHER_SPINUP_RPM;
+    private boolean launcherMotorsRunning = false;
 
     // ── Safety gate ───────────────────────────────────────────────────────────
     private boolean confirmed = false;
@@ -106,6 +113,7 @@ public class Mark2InitialTesting extends OpMode {
 
     // ── Button edge-detection ─────────────────────────────────────────────────
     private boolean prevLB2, prevRB2;
+    private boolean prevX2, prevB2, prevRT2, prevLT2, prevY2;
     private boolean prevDpadUp2, prevDpadDown2;
     private boolean prevStartGp1 = false;
     private boolean prevRB1      = false;   // GP1 right bumper — alliance flip toggle
@@ -119,16 +127,20 @@ public class Mark2InitialTesting extends OpMode {
         drivetrain = new Mark2Drivetrain(hardwareMap);       // no Pinpoint / IMU
         intake = new Mark2Intake(hardwareMap);
         launcher = new Mark2Launcher(hardwareMap, true);     // true = motors + servos
-        manualLauncher = new Mark2ManualLauncherController(launcher);
+        launchSequence = new Mark2LaunchSequence(launcher, intake);
 
         // Initialize intake servos to safe centered positions
         intake.setServoPosition(SERVO_CENTER_POS);
         intakeServoPos = SERVO_CENTER_POS;
 
         // Initialize launcher servos to safe centered positions
-        manualLauncher.centerServos();
         hoodServoPos = Mark2Launcher.clipHoodPosition(SERVO_CENTER_POS);
         launcher.setHoodPosition(hoodServoPos);
+        launcher.resetFeeder();
+        launcher.setAimPosition(SERVO_CENTER_POS);
+        launcherTargetRpm = LAUNCHER_SPINUP_RPM;
+        launcherMotorsRunning = false;
+        launcher.stopFlywheels();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -219,12 +231,20 @@ public class Mark2InitialTesting extends OpMode {
         drivetrain.driveSafe(gamepad1);
 
         // ── Intake motors ─────────────────────────────────────────────────────
-        if (gamepad2.y) {
-            intake.PickUp();
-        } else if (gamepad2.a) {
-            intake.Reverse();
-        } else {
-            intake.Stop();
+        boolean y2 = gamepad2.y;
+        if (y2 && !prevY2) {
+            launchSequence.resetFeeder();
+        }
+        prevY2 = y2;
+
+        if (!launchSequence.isActive()) {
+            if (y2) {
+                intake.PickUp();
+            } else if (gamepad2.a) {
+                intake.Reverse();
+            } else {
+                intake.Stop();
+            }
         }
 
         // ── Intake servo nudge (LB / RB) ─────────────────────────────────────
@@ -245,7 +265,40 @@ public class Mark2InitialTesting extends OpMode {
         prevRB2 = rb2;
 
         // ── Manual launcher bring-up controls ─────────────────────────────────
-        manualLauncher.update(gamepad2, dt);
+        boolean rt2 = gamepad2.right_trigger > 0.5;
+        if (rt2 && !prevRT2) {
+            launcherMotorsRunning = !launcherMotorsRunning;
+            if (launcherMotorsRunning) {
+                launcherTargetRpm = LAUNCHER_SPINUP_RPM;
+            } else {
+                launcher.stopFlywheels();
+                if (launchSequence.isActive()) {
+                    launchSequence.cancel();
+                }
+            }
+        }
+        prevRT2 = rt2;
+
+        boolean lt2 = gamepad2.left_trigger > 0.5;
+        if (lt2 && !prevLT2) {
+            launchSequence.startIfFlywheelRunning(
+                    launcherMotorsRunning && launcherTargetRpm > 0.0);
+        }
+        prevLT2 = lt2;
+
+        boolean x2 = gamepad2.x;
+        boolean b2 = gamepad2.b;
+
+        if (x2 && !prevX2) {
+            launcherTargetRpm = Math.max(0.0, launcherTargetRpm - RPM_NUDGE_STEP);
+        }
+
+        if (b2 && !prevB2) {
+            launcherTargetRpm += RPM_NUDGE_STEP;
+        }
+
+        prevX2 = x2;
+        prevB2 = b2;
 
         // GP2 dpad up/down nudges the hood servo within Mark2Launcher's safe hood limits.
         boolean dpadUp2 = gamepad2.dpad_up;
@@ -264,6 +317,13 @@ public class Mark2InitialTesting extends OpMode {
         prevDpadUp2 = dpadUp2;
         prevDpadDown2 = dpadDown2;
 
+        if (launcherMotorsRunning) {
+            launcher.setFlywheelTargetRpm(launcherTargetRpm);
+        }
+        launcher.updateMeasuredRpm(dt);
+        launcher.setAimFromStick(gamepad2.left_stick_x, dt);
+        launchSequence.update(dt);
+
         // ── Telemetry ─────────────────────────────────────────────────────────
         Pose2D pose = drivetrain.getPose();
 
@@ -279,19 +339,23 @@ public class Mark2InitialTesting extends OpMode {
                 : "unavailable (no Pinpoint)");
 
         telemetry.addLine("── Launcher ────────────────────");
-        telemetry.addData("  Mode", "MANUAL");
-        telemetry.addData("  Selected zone", manualLauncher.getSelectedZoneName());
-        telemetry.addData("  Zone RPM", "%.0f", manualLauncher.getSelectedZoneRpm());
-        telemetry.addData("  Zone hood", "%.3f", manualLauncher.getSelectedZoneHoodPosition());
-        telemetry.addData("  Target RPM", "%.0f", manualLauncher.getTargetRpmCommand());
+        telemetry.addData("  Mode", "DIRECT TEST");
+        telemetry.addData("  Motors", launcherMotorsRunning ? "ON  (GP2 RT to off)" : "off (GP2 RT to 1000 RPM)");
+        telemetry.addData("  Set RPM", "%.0f", launcherTargetRpm);
+        telemetry.addData("  Target RPM", "%.0f", launcher.getTargetRpm());
         telemetry.addData("  Measured RPM", "%.0f", launcher.getMeasuredRpm());
+        telemetry.addData("  Launch seq", launchSequence.getState().name());
         telemetry.addData("  Hood servo pos", "%.3f", launcher.getHoodPosition());
-        telemetry.addData("  Gate servo pos", "%.3f", manualLauncher.getFeederServoPos());
+        telemetry.addData("  Gate servo pos", "%.3f", launcher.getFeederPosition());
 
         telemetry.addLine("── Intake ──────────────────────");
         telemetry.addData("  Intake servo pos", "%.3f", intakeServoPos);
         telemetry.addData("  Motor running",
-                gamepad2.y ? "FORWARD" : (gamepad2.a ? "REVERSE" : "stopped"));
+                launchSequence.isRunningIntake()
+                        ? "FORWARD (launch sequence)"
+                        : (launchSequence.isActive()
+                        ? "waiting for launch intake"
+                        : (y2 ? "FORWARD" : (gamepad2.a ? "REVERSE" : "stopped"))));
 
         telemetry.addLine("── Turret Aim ──────────────────");
         telemetry.addData("  GP2 left stick X", "%.2f", gamepad2.left_stick_x);
@@ -301,6 +365,20 @@ public class Mark2InitialTesting extends OpMode {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    @Override
+    public void stop() {
+        launcherMotorsRunning = false;
+        if (launchSequence != null && launchSequence.isActive()) {
+            launchSequence.cancel();
+        }
+        if (launcher != null) {
+            launcher.stopFlywheels();
+        }
+        if (intake != null) {
+            intake.Stop();
+        }
+    }
+
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }

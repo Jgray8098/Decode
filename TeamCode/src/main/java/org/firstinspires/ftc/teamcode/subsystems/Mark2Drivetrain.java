@@ -392,6 +392,21 @@ public class Mark2Drivetrain {
         }
     }
 
+    /** Enable or disable field-centric driving without changing the heading reference. */
+    public void setFieldCentricEnabled(boolean enabled) {
+        fieldCentric = enabled;
+    }
+
+    /** @return {@code true} if field-centric driving has been requested. */
+    public boolean isFieldCentricEnabled() {
+        return fieldCentric;
+    }
+
+    /** Set the field-centric heading reference from a known field heading. */
+    public void setFieldCentricHeadingReference(double headingDegrees) {
+        fieldCentricHeadingOffset = Math.toRadians(headingDegrees);
+    }
+
     /** @return {@code true} if field-centric mode is currently active and Pinpoint is available. */
     public boolean isFieldCentric() {
         return fieldCentric && hasPinpoint;
@@ -404,8 +419,8 @@ public class Mark2Drivetrain {
 
     /**
      * Re-zero the field-centric heading reference without toggling off.
-     * Call this (GP1 back button) if the driver wants to realign "forward"
-     * mid-match without disabling field-centric mode.
+     * Call this if an OpMode wants to realign "forward" mid-match without
+     * disabling field-centric mode.
      */
     public void resetFieldCentricHeading() {
         if (hasPinpoint) {
