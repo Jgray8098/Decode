@@ -11,9 +11,9 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.paths.PathChain;
 import com.pedropathing.geometry.Pose;
 
-@Autonomous(name = "Pedro Pathing Autonomous", group = "Autonomous")
+@Autonomous(name = "Blue Far Direct From Pedro", group = "Autonomous")
 @Configurable // Panels
-public class PedroAutonomous extends OpMode {
+public class BlueFarDirectFromPedro extends OpMode {
     private TelemetryManager panelsTelemetry; // Panels Telemetry instance
     public Follower follower; // Pedro Pathing follower instance
     private int pathState; // Current autonomous path state (state machine)
