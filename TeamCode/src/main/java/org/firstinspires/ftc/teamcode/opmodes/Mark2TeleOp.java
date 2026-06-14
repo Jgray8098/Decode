@@ -28,7 +28,7 @@ import java.util.Locale;
  * Gamepad 2:
  *   Dpad Up press     - toggle close launcher preset
  *   Dpad Down press   - toggle far launcher preset
- *   Y press/hold      - return feeder gate to idle and run intake forward
+ *   Y press/hold      - return feeder gate to idle, reset post-launch beam latch, and run intake
  *   X hold            - intake reverse, only when launch sequence is idle
  *   Left bumper       - toggle automatic RPM/hood from Pinpoint distance
  *   Right bumper      - toggle turret lock on alliance goal target
@@ -71,7 +71,7 @@ public class Mark2TeleOp extends OpMode {
     @Override
     public void init() {
         drivetrain = new Mark2Drivetrain(hardwareMap);
-        intake = new Mark2Intake(hardwareMap);
+        intake = new Mark2Intake(hardwareMap, false);
         launcher = new Mark2Launcher(hardwareMap);
         manualLauncher = new Mark2ManualLauncherController(launcher, intake);
         autoLauncher = new Mark2AutoLauncherController(launcher);
@@ -81,16 +81,15 @@ public class Mark2TeleOp extends OpMode {
         drivetrain.setFieldCentricEnabled(true);
         setFieldCentricReferenceToSelectedAllianceStart();
 
-        launcher.resetFeeder();
-
         lastNs = System.nanoTime();
 
         telemetry.addLine("Mark2 TeleOp - Initialized");
+        telemetry.addLine("Servos will move on Start, not Init");
         telemetry.addLine("GP1: Drive   GP2: Intake + Launcher");
         telemetry.addLine("GP1 X=Alliance  Y=Reset pose  B=Drive mode");
         telemetry.addLine("GP1 RB=Launch feed");
         telemetry.addLine("GP2 DUp=Close toggle DDn=Far toggle");
-        telemetry.addLine("GP2 Y=Intake+GateIdle X=Reverse");
+        telemetry.addLine("GP2 Y=Intake+GateIdle+BeamReset X=Reverse");
         telemetry.addLine("GP2 LB=Auto RPM/hood  RB=Turret lock");
         telemetry.update();
     }
@@ -105,6 +104,17 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addLine("Field-centric starts enabled");
         telemetry.addLine("GP1 Y resets pose after start");
         telemetry.update();
+    }
+
+    @Override
+    public void start() {
+        if (intake != null) {
+            intake.HoldPosition();
+        }
+        if (launcher != null) {
+            launcher.resetFeeder();
+        }
+        lastNs = System.nanoTime();
     }
 
     @Override
@@ -255,6 +265,12 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addLine("-- Intake --------------------------");
         telemetry.addData("  Servo pos", String.format(Locale.US, "%.3f",
                 intake.getServoPosition()));
+        telemetry.addData("  Beam raw", intake.isBeamBreakDetected() ? "DETECTED" : "clear");
+        telemetry.addData("  Beam latch", intake.isBeamBreakBallLatched() ? "BALL HELD" : "clear");
+        telemetry.addData("  Beam seat", intake.isBeamBreakSeatDelayActive() ? "running 0.5s delay" : "off");
+        telemetry.addData("  Beam reset", manualLauncher.isBeamBreakResetPending()
+                ? "next GP2 Y intake"
+                : "not armed");
         telemetry.addData("  Running", intakeStatus());
 
         telemetry.update();
@@ -340,8 +356,11 @@ public class Mark2TeleOp extends OpMode {
         if (manualLauncher.isLaunchSequenceActive()) {
             return "waiting for launch intake";
         }
+        if (intake.isBeamBreakSeatDelayActive()) {
+            return gamepad2.y ? "FORWARD (seating ball)" : "SEATING (motor 2 delay)";
+        }
         if (gamepad2.y) {
-            return "FORWARD (differential)";
+            return intake.isBeamBreakBallLatched() ? "FORWARD (motor 1 only)" : "FORWARD (both motors)";
         }
         return gamepad2.x ? "REVERSE (arm up)" : "stopped/hold";
     }
