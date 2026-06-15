@@ -38,7 +38,7 @@ public class Mark2Launcher {
     /** Gate servos "push" position — feeds ball into launch mechanism. */
     public static final double FEEDER_SERVO_FEED_POSITION = 0.25;
     /** Gate servos retracted / resting position — default when not firing. */
-    public static final double FEEDER_SERVO_IDLE_POSITION = 0.50;
+    public static final double FEEDER_SERVO_IDLE_POSITION = 0.55;
 
     /** Minimum aim servo position reached by full-left stick input. */
     public static final double AIM_MIN_POS = 0.0;

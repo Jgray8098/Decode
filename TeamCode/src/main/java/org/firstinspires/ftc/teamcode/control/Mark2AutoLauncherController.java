@@ -44,9 +44,9 @@ public class Mark2AutoLauncherController {
 
         // Distance (inches) -> LaunchSetpoint (rpm, hoodPosition). Tune on robot.
         //setpointMap.put(24.0,  new LaunchSetpoint(2000.0, 0.20));
-        setpointMap.put(36.0,  new LaunchSetpoint(2050.0, 0.16));
-        setpointMap.put(48.0,  new LaunchSetpoint(2200.0, 0.40));
-        setpointMap.put(70.0,  new LaunchSetpoint(2400.0, 0.60));
+        setpointMap.put(36.0,  new LaunchSetpoint(2100.0, 0.16));
+        setpointMap.put(48.0,  new LaunchSetpoint(2250.0, 0.40));
+        setpointMap.put(70.0,  new LaunchSetpoint(2400.0, 0.55));
         setpointMap.put(81.0,  new LaunchSetpoint(2500.0, 0.62));
         setpointMap.put(100.0, new LaunchSetpoint(2800.0, 0.76));
         setpointMap.put(136.0, new LaunchSetpoint(3250.0, 0.80));

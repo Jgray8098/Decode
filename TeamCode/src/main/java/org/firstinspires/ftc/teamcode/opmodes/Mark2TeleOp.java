@@ -3,9 +3,12 @@ package org.firstinspires.ftc.teamcode.opmodes;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
+import com.pedropathing.geometry.Pose;
+
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.control.Mark2AutoLauncherController;
 import org.firstinspires.ftc.teamcode.control.Mark2ManualLauncherController;
+import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
@@ -80,6 +83,7 @@ public class Mark2TeleOp extends OpMode {
 
         drivetrain.setFieldCentricEnabled(true);
         setFieldCentricReferenceToSelectedAllianceStart();
+        applyStoredAutonomousPose();
 
         lastNs = System.nanoTime();
 
@@ -101,6 +105,7 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addLine("Mark2 TeleOp - Init");
         telemetry.addData("Alliance", String.format(Locale.US, "%s (GP1 X to %s)",
                 selectedAlliance.name(), oppositeAlliance(selectedAlliance).name()));
+        telemetry.addData("Pose", lastPoseReset);
         telemetry.addLine("Field-centric starts enabled");
         telemetry.addLine("GP1 Y resets pose after start");
         telemetry.update();
@@ -267,7 +272,10 @@ public class Mark2TeleOp extends OpMode {
                 intake.getServoPosition()));
         telemetry.addData("  Beam raw", intake.isBeamBreakDetected() ? "DETECTED" : "clear");
         telemetry.addData("  Beam latch", intake.isBeamBreakBallLatched() ? "BALL HELD" : "clear");
-        telemetry.addData("  Beam seat", intake.isBeamBreakSeatDelayActive() ? "running 0.5s delay" : "off");
+        telemetry.addData("  Beam seat", intake.isBeamBreakSeatDelayActive() ? "running seat delay" : "off");
+        telemetry.addData("  Beam hold", intake.isBeamBreakHoldActive() && !manualLauncher.isBeamBreakResetPending()
+                ? "motor 2 hold"
+                : "off");
         telemetry.addData("  Beam reset", manualLauncher.isBeamBreakResetPending()
                 ? "next GP2 Y intake"
                 : "not armed");
@@ -297,6 +305,25 @@ public class Mark2TeleOp extends OpMode {
         lastPoseReset = drivetrain.hasPinpoint()
                 ? String.format(Locale.US, "%s %.1f, %.2f, %.0f deg",
                         selectedAlliance.name(), xInches, yInches, headingDegrees)
+                : "Pinpoint unavailable";
+    }
+
+    private void applyStoredAutonomousPose() {
+        Pose autoPose = PoseStorage.lastPose;
+        if (autoPose == null) {
+            lastPoseReset = "no auto pose";
+            return;
+        }
+
+        double xInches = autoPose.getX();
+        double yInches = autoPose.getY();
+        double headingDegrees = Math.toDegrees(autoPose.getHeading());
+
+        drivetrain.setStartingPose(xInches, yInches, headingDegrees);
+
+        lastPoseReset = drivetrain.hasPinpoint()
+                ? String.format(Locale.US, "AUTO %.1f, %.2f, %.0f deg",
+                        xInches, yInches, headingDegrees)
                 : "Pinpoint unavailable";
     }
 
@@ -358,6 +385,9 @@ public class Mark2TeleOp extends OpMode {
         }
         if (intake.isBeamBreakSeatDelayActive()) {
             return gamepad2.y ? "FORWARD (seating ball)" : "SEATING (motor 2 delay)";
+        }
+        if (intake.isBeamBreakHoldActive() && !manualLauncher.isBeamBreakResetPending()) {
+            return gamepad2.y ? "FORWARD (motor 1 + hold)" : "HOLDING (motor 2)";
         }
         if (gamepad2.y) {
             return intake.isBeamBreakBallLatched() ? "FORWARD (motor 1 only)" : "FORWARD (both motors)";

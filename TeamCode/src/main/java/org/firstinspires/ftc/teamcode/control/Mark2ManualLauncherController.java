@@ -13,9 +13,14 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
  */
 public class Mark2ManualLauncherController {
 
+    public static final double CLOSE_ZONE_RPM = 2450.0;
+    public static final double CLOSE_ZONE_HOOD_POSITION = 0.60;
+    public static final double FAR_ZONE_RPM = 3250.0;
+    public static final double FAR_ZONE_HOOD_POSITION = 0.80;
+
     private enum ShotZone {
-        CLOSE("CLOSE", 2450.0, 0.60),
-        FAR("FAR", 3250.0, 0.80);
+        CLOSE("CLOSE", CLOSE_ZONE_RPM, CLOSE_ZONE_HOOD_POSITION),
+        FAR("FAR", FAR_ZONE_RPM, FAR_ZONE_HOOD_POSITION);
 
         final String label;
         final double rpm;
@@ -171,6 +176,8 @@ public class Mark2ManualLauncherController {
                 intake.ReverseArm();
             } else if (intake.isBeamBreakSeatDelayActive()) {
                 intake.ContinueBeamBreakSeatDelay(dtSec);
+            } else if (intake.isBeamBreakHoldActive() && !resetBeamBreakOnNextForwardIntake) {
+                intake.HoldBeamBreakArtifact();
             } else {
                 intake.HoldPosition();
             }

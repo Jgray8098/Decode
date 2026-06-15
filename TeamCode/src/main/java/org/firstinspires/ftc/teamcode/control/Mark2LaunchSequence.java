@@ -14,7 +14,7 @@ public class Mark2LaunchSequence {
         RUNNING_INTAKE
     }
 
-    public static final double INTAKE_START_DELAY_S = 0.30;
+    public static final double INTAKE_START_DELAY_S = 0.18;
     public static final double INTAKE_RUN_TIME_S = 2.00;
 
     private final Mark2Launcher launcher;

@@ -23,9 +23,9 @@ public class Mark2Intake {
      * Motor two power as a fraction of {@link #INTAKE_POWER} when running in
      * differential (TeleOp) mode.
      */
-    private static final double INTAKE_MOTOR_TWO_FRACTION  = 1.0 / 2.5;
+    private static final double INTAKE_MOTOR_TWO_FRACTION  = 1.0 / 2.0;
     private static final boolean BEAM_BREAK_DETECTED_STATE = true;
-    private static final double BEAM_BREAK_SEAT_DELAY_S = 0.50;
+    private static final double BEAM_BREAK_SEAT_DELAY_S = 1.0;
 
     /** Arm raised — default position when idle, stopped, or reversing. */
     private static final double INTAKE_SERVO_STOWED_POSITION  = 0.34;
@@ -75,7 +75,7 @@ public class Mark2Intake {
         updateBeamBreakLatch(dtSec);
 
         intakeMotorOne.setPower(INTAKE_POWER);
-        intakeMotorTwo.setPower(shouldRunIntakeMotorTwo() ? INTAKE_POWER * INTAKE_MOTOR_TWO_FRACTION : 0.0);
+        intakeMotorTwo.setPower(getIntakeMotorTwoForwardPower());
         setServoPosition(INTAKE_SERVO_INTAKE_POSITION);   // arm down to sweep
     }
 
@@ -83,13 +83,20 @@ public class Mark2Intake {
         updateBeamBreakSeatDelay(dtSec);
 
         if (!isBeamBreakSeatDelayActive()) {
-            HoldPosition();
+            HoldBeamBreakArtifact();
             return;
         }
 
         intakeMotorOne.setPower(0);
         intakeMotorTwo.setPower(INTAKE_POWER * INTAKE_MOTOR_TWO_FRACTION);
         setServoPosition(INTAKE_SERVO_INTAKE_POSITION);
+    }
+
+    public void HoldBeamBreakArtifact() {
+        finishBeamBreakSeatDelay();
+        intakeMotorOne.setPower(0);
+        intakeMotorTwo.setPower(INTAKE_HOLD_ARTIFACT_POWER);
+        setServoPosition(INTAKE_SERVO_STOWED_POSITION);
     }
 
     /** Stop motors and raise arm to stowed position. */
@@ -164,6 +171,10 @@ public class Mark2Intake {
         return beamBreakBallLatched && beamBreakSeatDelayElapsedS < BEAM_BREAK_SEAT_DELAY_S;
     }
 
+    public boolean isBeamBreakHoldActive() {
+        return beamBreakBallLatched && !isBeamBreakSeatDelayActive();
+    }
+
     public void resetBeamBreakBallLatch() {
         beamBreakBallLatched = false;
         beamBreakSeatDelayElapsedS = 0.0;
@@ -190,8 +201,11 @@ public class Mark2Intake {
         }
     }
 
-    private boolean shouldRunIntakeMotorTwo() {
-        return !beamBreakBallLatched || isBeamBreakSeatDelayActive();
+    private double getIntakeMotorTwoForwardPower() {
+        if (!beamBreakBallLatched || isBeamBreakSeatDelayActive()) {
+            return INTAKE_POWER * INTAKE_MOTOR_TWO_FRACTION;
+        }
+        return INTAKE_HOLD_ARTIFACT_POWER;
     }
 
     private void finishBeamBreakSeatDelay() {
