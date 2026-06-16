@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.pedropathing.follower.Follower;
-import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
@@ -19,12 +18,12 @@ import org.firstinspires.ftc.teamcode.subsystems.Mark2Launcher;
 public class ZenithBlueClose extends LinearOpMode {
 
     private static final double MAX_POWER_NORMAL = 0.85;
-    private static final double GATE1_INTAKE_MAX_POWER = 0.35;
+    private static final double GATE_INTAKE_MAX_POWER = 0.35;
     private static final double RPM_READY_FRACTION = 0.90;
     private static final double SPINUP_TIMEOUT_S = 2.00;
     private static final double LAUNCH_TIMEOUT_S = 6.00;
     private static final double POST_LAUNCH_HOLD_S = 0.0;
-    private static final double GATE_INTAKE_SETTLE_S = 1.50;
+    private static final double GATE_INTAKE_SETTLE_S = 1.0;
 
     private static final double ROW_AIM_POSITION = 0.50;
     private static final double GATE_AIM_POSITION = 0.86;
@@ -33,40 +32,34 @@ public class ZenithBlueClose extends LinearOpMode {
     private static final double START_HEADING_DEG = 323.0;
     private static final Pose START_POSE = pose(19.450, 119.623, START_HEADING_DEG);
 
-    private static final Pose PRELOAD_LAUNCH = point(54.393, 85.593);
+    private static final Pose PRELOAD_LAUNCH = point(55.393, 85.593);
     private static final double PRELOAD_LAUNCH_HEADING_DEG = 318.0;
 
-    private static final Pose ROW2_INTAKE_CONTROL = point(77.684, 56.987);
-    private static final Pose ROW2_INTAKE = point(21.913, 56.959);
-    private static final double ROW2_INTAKE_HEADING_DEG = 200.0;
-    private static final Pose ROW2_LAUNCH = point(55.500, 85.200);
+    private static final Pose ROW2_ALIGN = point(47.118, 57.300);
+    private static final double ROW2_ALIGN_HEADING_DEG = 180.0;
+    private static final Pose ROW2_INTAKE = point(21.913, 57.0);
+    private static final double ROW2_INTAKE_HEADING_DEG = 180.0;
+    private static final Pose ROW2_LAUNCH = point(55.238, 85.504);
     private static final double ROW2_LAUNCH_HEADING_DEG = 220.0;
 
-    private static final Pose GATE1_ALIGN = point(25.856, 55.540);
-    private static final double GATE1_ALIGN_HEADING_DEG = 140.0;
-    private static final Pose GATE1_INTAKE = point(14.860, 55.628);
-    private static final double GATE1_INTAKE_HEADING_DEG = 140.0;
+    private static final Pose GATE_ALIGN = point(25.856, 55.540);
+    private static final double GATE_ALIGN_HEADING_DEG = 140.0;
+    private static final Pose GATE_INTAKE = point(14.860, 55.628);
+    private static final double GATE_INTAKE_HEADING_DEG = 150.0;
+    private static final Pose GATE_CLEAR = point(22.000, 60.000);
+    private static final double GATE_CLEAR_HEADING_DEG = 220.0;
     private static final Pose GATE1_LAUNCH = point(55.549, 85.135);
 
-    private static final Pose GATE2_INTAKE_CONTROL = point(28.626, 52.448);
-    private static final Pose GATE2_INTAKE = point(13.656, 59.517);
     private static final Pose GATE2_LAUNCH = point(55.333, 85.523);
 
-    private static final Pose GATE3_INTAKE_CONTROL = point(28.565, 52.549);
-    private static final Pose GATE3_INTAKE = point(13.693, 59.558);
     private static final Pose GATE3_LAUNCH = point(55.297, 85.502);
 
-    private static final Pose GATE4_INTAKE_CONTROL = point(28.593, 52.601);
-    private static final Pose GATE4_INTAKE = point(13.833, 59.559);
-    private static final Pose GATE4_LAUNCH = point(55.436, 85.618);
-
-    private static final double GATE_INTAKE_LAUNCH_HEADING_DEG = 140.0;
     private static final double GATE_LAUNCH_HEADING_DEG = 220.0;
 
-    private static final Pose ROW1_INTAKE = point(23.797, 83.290);
+    private static final Pose ROW1_INTAKE = point(26.797, 83.290);
     private static final double ROW1_INTAKE_HEADING_DEG = 180.0;
-    private static final Pose ROW1_LAUNCH = point(56.682, 103.156);
-    private static final double ROW1_LAUNCH_HEADING_DEG = 220.0;
+    private static final Pose ROW1_LAUNCH = point(55.5, 100.0);
+    private static final double ROW1_LAUNCH_HEADING_DEG = 226.0;
 
     private Follower follower;
     private Paths paths;
@@ -115,6 +108,7 @@ public class ZenithBlueClose extends LinearOpMode {
         launchAndHold(ROW_AIM_POSITION, "LaunchPreloads");
         prepareLauncher(GATE_AIM_POSITION);
 
+        followDriveOnly(paths.AlignRow2, "AlignRow2");
         followWithBeamBreakIntake(paths.IntakeRow2, "IntakeRow2", 0.0);
         followDriveOnly(paths.LaunchRow2, "LaunchRow2");
         launchAndHold(GATE_AIM_POSITION, "LaunchRow2");
@@ -122,34 +116,48 @@ public class ZenithBlueClose extends LinearOpMode {
         prepareLauncher(GATE_AIM_POSITION);
         followDriveOnly(paths.Gate1Align, "Gate1Align");
         followWithBeamBreakIntake(
-                paths.Gate1Intake, "Gate1Intake", GATE_INTAKE_SETTLE_S, GATE1_INTAKE_MAX_POWER);
+                paths.Gate1Intake, "Gate1Intake", GATE_INTAKE_SETTLE_S, GATE_INTAKE_MAX_POWER);
+        followDriveOnly(paths.Gate1Clear, "Gate1Clear");
         followDriveOnly(paths.Gate1Launch, "Gate1Launch");
         launchAndHold(GATE_AIM_POSITION, "LaunchGate1");
 
         prepareLauncher(GATE_AIM_POSITION);
-        followWithBeamBreakIntake(paths.IntakeGate2, "IntakeGate2", GATE_INTAKE_SETTLE_S);
-        followDriveOnly(paths.LaunchGate2, "LaunchGate2");
+        followDriveOnly(paths.Gate2Align, "Gate2Align");
+        followWithBeamBreakIntake(
+                paths.Gate2Intake, "Gate2Intake", GATE_INTAKE_SETTLE_S, GATE_INTAKE_MAX_POWER);
+        followDriveOnly(paths.Gate2Clear, "Gate2Clear");
+        followDriveOnly(paths.Gate2Launch, "Gate2Launch");
         launchAndHold(GATE_AIM_POSITION, "LaunchGate2");
 
         prepareLauncher(GATE_AIM_POSITION);
-        followWithBeamBreakIntake(paths.IntakeGate3, "IntakeGate3", GATE_INTAKE_SETTLE_S);
-        followDriveOnly(paths.LaunchGate3, "LaunchGate3");
+        followDriveOnly(paths.Gate3Align, "Gate3Align");
+        followWithBeamBreakIntake(
+                paths.Gate3Intake, "Gate3Intake", GATE_INTAKE_SETTLE_S, GATE_INTAKE_MAX_POWER);
+        followDriveOnly(paths.Gate3Clear, "Gate3Clear");
+        followDriveOnly(paths.Gate3Launch, "Gate3Launch");
         launchAndHold(GATE_AIM_POSITION, "LaunchGate3");
 
-        prepareLauncher(GATE_AIM_POSITION);
-        followWithBeamBreakIntake(paths.IntakeGate4, "IntakeGate4", GATE_INTAKE_SETTLE_S);
-        followDriveOnly(paths.LaunchGate4, "LaunchGate4");
-        launchAndHold(GATE_AIM_POSITION, "LaunchGate4");
-
-        prepareLauncher(GATE_AIM_POSITION);
+        prepareLauncher(
+                GATE_AIM_POSITION,
+                Mark2AutoLaunchSettings.AUTO_ROW1_RPM,
+                Mark2AutoLaunchSettings.AUTO_ROW1_HOOD_POSITION);
         followWithBeamBreakIntake(paths.IntakeRow1, "IntakeRow1", 0.0);
         followDriveOnly(paths.LaunchRow1, "LaunchRow1");
-        launchAndHold(GATE_AIM_POSITION, "LaunchRow1");
+        launchAndHold(
+                GATE_AIM_POSITION,
+                "LaunchRow1",
+                Mark2AutoLaunchSettings.AUTO_ROW1_RPM,
+                Mark2AutoLaunchSettings.AUTO_ROW1_HOOD_POSITION);
 
         phase = "done";
         postTelemetry();
-        PoseStorage.lastPose = follower.getPose();
+        saveTeleOpPose();
         stopAll();
+    }
+
+    private void saveTeleOpPose() {
+        Pose finalPose = follower.getPose();
+        PoseStorage.lastPose = pose(finalPose.getX(), finalPose.getY(), ROW1_LAUNCH_HEADING_DEG);
     }
 
     private void followDriveOnly(PathChain path, String label) {
@@ -200,17 +208,32 @@ public class ZenithBlueClose extends LinearOpMode {
     }
 
     private void prepareLauncher(double aimPosition) {
-        launchTargetRpm = Mark2AutoLaunchSettings.AUTO_CLOSE_RPM;
+        prepareLauncher(
+                aimPosition,
+                Mark2AutoLaunchSettings.AUTO_CLOSE_RPM,
+                Mark2AutoLaunchSettings.AUTO_CLOSE_HOOD_POSITION);
+    }
+
+    private void prepareLauncher(double aimPosition, double targetRpm, double hoodPosition) {
+        launchTargetRpm = targetRpm;
         launchAimPosition = aimPosition;
         launcher.setFlywheelTargetRpm(launchTargetRpm);
-        launcher.setHoodPosition(Mark2AutoLaunchSettings.AUTO_CLOSE_HOOD_POSITION);
+        launcher.setHoodPosition(hoodPosition);
         launcher.setAimPosition(launchAimPosition);
         launcher.resetFeeder();
     }
 
     private void launchAndHold(double aimPosition, String label) {
+        launchAndHold(
+                aimPosition,
+                label,
+                Mark2AutoLaunchSettings.AUTO_CLOSE_RPM,
+                Mark2AutoLaunchSettings.AUTO_CLOSE_HOOD_POSITION);
+    }
+
+    private void launchAndHold(double aimPosition, String label, double targetRpm, double hoodPosition) {
         phase = "Launch " + label;
-        prepareLauncher(aimPosition);
+        prepareLauncher(aimPosition, targetRpm, hoodPosition);
         launchSequence.cancel();
 
         double elapsedS = 0.0;
@@ -309,17 +332,21 @@ public class ZenithBlueClose extends LinearOpMode {
 
     public static class Paths {
         public PathChain LaunchPreloads;
+        public PathChain AlignRow2;
         public PathChain IntakeRow2;
         public PathChain LaunchRow2;
         public PathChain Gate1Align;
         public PathChain Gate1Intake;
+        public PathChain Gate1Clear;
         public PathChain Gate1Launch;
-        public PathChain IntakeGate2;
-        public PathChain LaunchGate2;
-        public PathChain IntakeGate3;
-        public PathChain LaunchGate3;
-        public PathChain IntakeGate4;
-        public PathChain LaunchGate4;
+        public PathChain Gate2Align;
+        public PathChain Gate2Intake;
+        public PathChain Gate2Clear;
+        public PathChain Gate2Launch;
+        public PathChain Gate3Align;
+        public PathChain Gate3Intake;
+        public PathChain Gate3Clear;
+        public PathChain Gate3Launch;
         public PathChain IntakeRow1;
         public PathChain LaunchRow1;
 
@@ -331,8 +358,15 @@ public class ZenithBlueClose extends LinearOpMode {
                             headingRad(PRELOAD_LAUNCH_HEADING_DEG))
                     .build();
 
+            AlignRow2 = follower.pathBuilder().addPath(
+                    new BezierLine(PRELOAD_LAUNCH, ROW2_ALIGN)
+            ).setLinearHeadingInterpolation(
+                            headingRad(PRELOAD_LAUNCH_HEADING_DEG),
+                            headingRad(ROW2_ALIGN_HEADING_DEG))
+                    .build();
+
             IntakeRow2 = follower.pathBuilder().addPath(
-                    new BezierCurve(PRELOAD_LAUNCH, ROW2_INTAKE_CONTROL, ROW2_INTAKE)
+                    new BezierLine(ROW2_ALIGN, ROW2_INTAKE)
             ).setTangentHeadingInterpolation()
                     .build();
 
@@ -344,66 +378,93 @@ public class ZenithBlueClose extends LinearOpMode {
                     .build();
 
             Gate1Align = follower.pathBuilder().addPath(
-                    new BezierLine(ROW2_LAUNCH, GATE1_ALIGN)
+                    new BezierLine(ROW2_LAUNCH, GATE_ALIGN)
             ).setLinearHeadingInterpolation(
                             headingRad(ROW2_LAUNCH_HEADING_DEG),
-                            headingRad(GATE1_ALIGN_HEADING_DEG))
+                            headingRad(GATE_ALIGN_HEADING_DEG))
                     .build();
 
             Gate1Intake = follower.pathBuilder().addPath(
-                    new BezierLine(GATE1_ALIGN, GATE1_INTAKE)
+                    new BezierLine(GATE_ALIGN, GATE_INTAKE)
             ).setLinearHeadingInterpolation(
-                            headingRad(GATE1_ALIGN_HEADING_DEG),
-                            headingRad(GATE1_INTAKE_HEADING_DEG))
+                            headingRad(GATE_ALIGN_HEADING_DEG),
+                            headingRad(GATE_INTAKE_HEADING_DEG))
+                    .build();
+
+            Gate1Clear = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_INTAKE, GATE_CLEAR)
+            ).setLinearHeadingInterpolation(
+                            headingRad(GATE_INTAKE_HEADING_DEG),
+                            headingRad(GATE_CLEAR_HEADING_DEG))
                     .build();
 
             Gate1Launch = follower.pathBuilder().addPath(
-                    new BezierLine(GATE1_INTAKE, GATE1_LAUNCH)
+                    new BezierLine(GATE_CLEAR, GATE1_LAUNCH)
             ).setLinearHeadingInterpolation(
-                            headingRad(GATE_INTAKE_LAUNCH_HEADING_DEG),
+                            headingRad(GATE_CLEAR_HEADING_DEG),
                             headingRad(GATE_LAUNCH_HEADING_DEG))
                     .build();
 
-            IntakeGate2 = follower.pathBuilder().addPath(
-                    new BezierCurve(GATE1_LAUNCH, GATE2_INTAKE_CONTROL, GATE2_INTAKE)
-            ).setTangentHeadingInterpolation()
+            Gate2Align = follower.pathBuilder().addPath(
+                    new BezierLine(GATE1_LAUNCH, GATE_ALIGN)
+            ).setLinearHeadingInterpolation(
+                            headingRad(GATE_LAUNCH_HEADING_DEG),
+                            headingRad(GATE_ALIGN_HEADING_DEG))
                     .build();
 
-            LaunchGate2 = follower.pathBuilder().addPath(
-                    new BezierLine(GATE2_INTAKE, GATE2_LAUNCH)
+            Gate2Intake = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_ALIGN, GATE_INTAKE)
             ).setLinearHeadingInterpolation(
-                            headingRad(GATE_INTAKE_LAUNCH_HEADING_DEG),
+                            headingRad(GATE_ALIGN_HEADING_DEG),
+                            headingRad(GATE_INTAKE_HEADING_DEG))
+                    .build();
+
+            Gate2Clear = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_INTAKE, GATE_CLEAR)
+            ).setLinearHeadingInterpolation(
+                            headingRad(GATE_INTAKE_HEADING_DEG),
+                            headingRad(GATE_CLEAR_HEADING_DEG))
+                    .build();
+
+            Gate2Launch = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_CLEAR, GATE2_LAUNCH)
+            ).setLinearHeadingInterpolation(
+                            headingRad(GATE_CLEAR_HEADING_DEG),
                             headingRad(GATE_LAUNCH_HEADING_DEG))
                     .build();
 
-            IntakeGate3 = follower.pathBuilder().addPath(
-                    new BezierCurve(GATE2_LAUNCH, GATE3_INTAKE_CONTROL, GATE3_INTAKE)
-            ).setTangentHeadingInterpolation()
-                    .build();
-
-            LaunchGate3 = follower.pathBuilder().addPath(
-                    new BezierLine(GATE3_INTAKE, GATE3_LAUNCH)
+            Gate3Align = follower.pathBuilder().addPath(
+                    new BezierLine(GATE2_LAUNCH, GATE_ALIGN)
             ).setLinearHeadingInterpolation(
-                            headingRad(GATE_INTAKE_LAUNCH_HEADING_DEG),
-                            headingRad(GATE_LAUNCH_HEADING_DEG))
+                            headingRad(GATE_LAUNCH_HEADING_DEG),
+                            headingRad(GATE_ALIGN_HEADING_DEG))
                     .build();
 
-            IntakeGate4 = follower.pathBuilder().addPath(
-                    new BezierCurve(GATE3_LAUNCH, GATE4_INTAKE_CONTROL, GATE4_INTAKE)
-            ).setTangentHeadingInterpolation()
-                    .build();
-
-            LaunchGate4 = follower.pathBuilder().addPath(
-                    new BezierLine(GATE4_INTAKE, GATE4_LAUNCH)
+            Gate3Intake = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_ALIGN, GATE_INTAKE)
             ).setLinearHeadingInterpolation(
-                            headingRad(GATE_INTAKE_LAUNCH_HEADING_DEG),
+                            headingRad(GATE_ALIGN_HEADING_DEG),
+                            headingRad(GATE_INTAKE_HEADING_DEG))
+                    .build();
+
+            Gate3Clear = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_INTAKE, GATE_CLEAR)
+            ).setLinearHeadingInterpolation(
+                            headingRad(GATE_INTAKE_HEADING_DEG),
+                            headingRad(GATE_CLEAR_HEADING_DEG))
+                    .build();
+
+            Gate3Launch = follower.pathBuilder().addPath(
+                    new BezierLine(GATE_CLEAR, GATE3_LAUNCH)
+            ).setLinearHeadingInterpolation(
+                            headingRad(GATE_CLEAR_HEADING_DEG),
                             headingRad(GATE_LAUNCH_HEADING_DEG))
                     .build();
 
             IntakeRow1 = follower.pathBuilder().addPath(
-                    new BezierLine(GATE4_LAUNCH, ROW1_INTAKE)
+                    new BezierLine(GATE3_LAUNCH, ROW1_INTAKE)
             ).setLinearHeadingInterpolation(
-                            headingRad(ROW1_INTAKE_HEADING_DEG),
+                            headingRad(GATE_LAUNCH_HEADING_DEG),
                             headingRad(ROW1_INTAKE_HEADING_DEG))
                     .build();
 

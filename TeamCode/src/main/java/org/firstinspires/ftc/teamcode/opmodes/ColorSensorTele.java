@@ -25,7 +25,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.PoseStorage;
 import org.firstinspires.ftc.teamcode.control.ArtifactTracker;
 import org.firstinspires.ftc.teamcode.control.MotifStorage;
 
-@TeleOp(name = "ColorSensorTele")
+//@TeleOp(name = "ColorSensorTele")
 public class ColorSensorTele extends OpMode {
     private final MecanumDrive drive = new MecanumDrive();
 

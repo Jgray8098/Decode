@@ -18,7 +18,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Red Far", group = "Comp")
+//@Autonomous(name = "Red Far", group = "Comp")
 public class CurrentRedAutoFar extends LinearOpMode {
 
     // =========================================================

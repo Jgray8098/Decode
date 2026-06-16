@@ -24,7 +24,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  *
  * Tune LAUNCH_DISTANCE_FAR to match your actual target distance.
  */
-@Autonomous(name = "Mark2 Red Auto Far", group = "Mark2")
+//@Autonomous(name = "Mark2 Red Auto Far", group = "Mark2")
 public class Mark2RedAutoFar extends Mark2AutoBase {
 
     // ─── Starting pose ────────────────────────────────────────────────────────

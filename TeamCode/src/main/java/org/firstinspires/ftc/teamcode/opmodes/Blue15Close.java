@@ -15,7 +15,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Blue15Close", group = "Comp")
+//@Autonomous(name = "Blue15Close", group = "Comp")
 public class Blue15Close extends LinearOpMode {
 
     // ===== Flywheel gates =====

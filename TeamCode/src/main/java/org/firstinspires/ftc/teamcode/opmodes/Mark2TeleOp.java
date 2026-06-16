@@ -58,6 +58,8 @@ public class Mark2TeleOp extends OpMode {
     private static final double RED_START_Y_IN = 76.46;
     private static final double RED_START_HEADING_DEG = 0.0;
 
+    private static final double AUTO_POSE_HEADING_OFFSET_DEG = 0.0;
+
     private long lastNs;
 
     private boolean prevX1 = false;
@@ -81,7 +83,7 @@ public class Mark2TeleOp extends OpMode {
 
         targetLock = new Mark2TargetLock();
 
-        drivetrain.setFieldCentricEnabled(true);
+        drivetrain.setFieldCentricEnabled(false);
         setFieldCentricReferenceToSelectedAllianceStart();
         applyStoredAutonomousPose();
 
@@ -106,13 +108,14 @@ public class Mark2TeleOp extends OpMode {
         telemetry.addData("Alliance", String.format(Locale.US, "%s (GP1 X to %s)",
                 selectedAlliance.name(), oppositeAlliance(selectedAlliance).name()));
         telemetry.addData("Pose", lastPoseReset);
-        telemetry.addLine("Field-centric starts enabled");
+        telemetry.addLine("Robot-centric starts enabled");
         telemetry.addLine("GP1 Y resets pose after start");
         telemetry.update();
     }
 
     @Override
     public void start() {
+        applyStoredAutonomousPose();
         if (intake != null) {
             intake.HoldPosition();
         }
@@ -249,8 +252,17 @@ public class Mark2TeleOp extends OpMode {
         Mark2TargetLock.FieldPoint target = targetLock.getGoal(selectedAlliance);
         if (drivetrain.hasPinpoint()) {
             org.firstinspires.ftc.robotcore.external.navigation.Pose2D pose = drivetrain.getPose();
+            double robotX = pose.getX(org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+            double robotY = pose.getY(org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+            double robotHeadingDeg = pose.getHeading(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.DEGREES);
+            double targetHeadingDeg = normalizeDegrees(
+                    Math.toDegrees(Math.atan2(target.yInches - robotY, target.xInches - robotX)));
+
             telemetry.addData("  Target distance", String.format(Locale.US, "%.1f in",
                     targetLock.computeDistanceToGoalInches(pose, selectedAlliance)));
+            telemetry.addData("  Target heading", String.format(Locale.US, "%.1f deg", targetHeadingDeg));
+            telemetry.addData("  Robot front/back", String.format(Locale.US, "%.1f / %.1f deg",
+                    robotHeadingDeg, normalizeDegrees(robotHeadingDeg + 180.0)));
         } else {
             telemetry.addData("  Target distance", "unavailable (no Pinpoint)");
         }
@@ -317,13 +329,14 @@ public class Mark2TeleOp extends OpMode {
 
         double xInches = autoPose.getX();
         double yInches = autoPose.getY();
-        double headingDegrees = Math.toDegrees(autoPose.getHeading());
+        double rawHeadingDegrees = Math.toDegrees(autoPose.getHeading());
+        double headingDegrees = normalizeDegrees(rawHeadingDegrees + AUTO_POSE_HEADING_OFFSET_DEG);
 
         drivetrain.setStartingPose(xInches, yInches, headingDegrees);
 
         lastPoseReset = drivetrain.hasPinpoint()
-                ? String.format(Locale.US, "AUTO %.1f, %.2f, %.0f deg",
-                        xInches, yInches, headingDegrees)
+                ? String.format(Locale.US, "AUTO %.1f, %.2f, raw %.0f -> %.0f deg",
+                        xInches, yInches, rawHeadingDegrees, headingDegrees)
                 : "Pinpoint unavailable";
     }
 
@@ -374,6 +387,14 @@ public class Mark2TeleOp extends OpMode {
 
     private static double nanToZero(double v) {
         return Double.isNaN(v) ? 0.0 : v;
+    }
+
+    private static double normalizeDegrees(double degrees) {
+        double normalized = degrees % 360.0;
+        if (normalized < 0.0) {
+            normalized += 360.0;
+        }
+        return normalized;
     }
 
     private String intakeStatus() {

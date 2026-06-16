@@ -23,7 +23,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  *
  * Tune LAUNCH_DISTANCE_CLOSE to match your actual target distance.
  */
-@Autonomous(name = "Mark2 Blue Close High", group = "Mark2")
+//@Autonomous(name = "Mark2 Blue Close High", group = "Mark2")
 public class Mark2BlueCloseAutoHigh extends Mark2AutoBase {
 
     // ─── Starting pose ────────────────────────────────────────────────────────
