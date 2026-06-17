@@ -38,7 +38,7 @@ public class Mark2Launcher {
     /** Gate servos "push" position — feeds ball into launch mechanism. */
     public static final double FEEDER_SERVO_FEED_POSITION = 0.25;
     /** Gate servos retracted / resting position — default when not firing. */
-    public static final double FEEDER_SERVO_IDLE_POSITION = 0.52;
+    public static final double FEEDER_SERVO_IDLE_POSITION = 0.54;
 
     /** Minimum aim servo position reached by full-left stick input. */
     public static final double AIM_MIN_POS = 0.0;
@@ -62,6 +62,8 @@ public class Mark2Launcher {
 
     /** Nominal battery voltage used for voltage compensation. */
     private static final double NOMINAL_VOLTAGE = 12.0;
+    /** Set true to scale flywheel feedforward by battery voltage. */
+    private static final boolean USE_VOLTAGE_COMPENSATION = true;
 
     // Default custom flywheel velocity controller gains.
     private static final double DEFAULT_FLYWHEEL_KS = 0.2;
@@ -377,7 +379,7 @@ public class Mark2Launcher {
 
     private double calculateFlywheelOutput(
             double targetRpm, double error, double integral, double derivative) {
-        double voltageCompensation = NOMINAL_VOLTAGE / getBatteryVoltage();
+        double voltageCompensation = USE_VOLTAGE_COMPENSATION ? NOMINAL_VOLTAGE / getBatteryVoltage() : 1.0;
         double feedforward = (flywheelKs + flywheelKv * targetRpm) * voltageCompensation;
         double feedback = flywheelKp * error
                 + flywheelKi * integral

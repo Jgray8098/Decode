@@ -24,6 +24,7 @@ public class ZenithBlueClose extends LinearOpMode {
     private static final double LAUNCH_TIMEOUT_S = 6.00;
     private static final double POST_LAUNCH_HOLD_S = 0.0;
     private static final double GATE_INTAKE_SETTLE_S = 1.0;
+    private static final double ROW_INTAKE_LAUNCH_CARRY_S = 0.50;
 
     private static final double ROW_AIM_POSITION = 0.50;
     private static final double GATE_AIM_POSITION = 0.86;
@@ -109,8 +110,8 @@ public class ZenithBlueClose extends LinearOpMode {
         prepareLauncher(GATE_AIM_POSITION);
 
         followDriveOnly(paths.AlignRow2, "AlignRow2");
-        followWithBeamBreakIntake(paths.IntakeRow2, "IntakeRow2", 0.0);
-        followDriveOnly(paths.LaunchRow2, "LaunchRow2");
+        followWithBeamBreakIntake(paths.IntakeRow2, "IntakeRow2", 0.0, MAX_POWER_NORMAL, false);
+        followDriveOnlyWithIntakeCarry(paths.LaunchRow2, "LaunchRow2", ROW_INTAKE_LAUNCH_CARRY_S);
         launchAndHold(GATE_AIM_POSITION, "LaunchRow2");
 
         prepareLauncher(GATE_AIM_POSITION);
@@ -141,8 +142,8 @@ public class ZenithBlueClose extends LinearOpMode {
                 GATE_AIM_POSITION,
                 Mark2AutoLaunchSettings.AUTO_ROW1_RPM,
                 Mark2AutoLaunchSettings.AUTO_ROW1_HOOD_POSITION);
-        followWithBeamBreakIntake(paths.IntakeRow1, "IntakeRow1", 0.0);
-        followDriveOnly(paths.LaunchRow1, "LaunchRow1");
+        followWithBeamBreakIntake(paths.IntakeRow1, "IntakeRow1", 0.0, MAX_POWER_NORMAL, false);
+        followDriveOnlyWithIntakeCarry(paths.LaunchRow1, "LaunchRow1", ROW_INTAKE_LAUNCH_CARRY_S);
         launchAndHold(
                 GATE_AIM_POSITION,
                 "LaunchRow1",
@@ -179,6 +180,11 @@ public class ZenithBlueClose extends LinearOpMode {
 
     private void followWithBeamBreakIntake(
             PathChain path, String label, double settleSeconds, double maxPower) {
+        followWithBeamBreakIntake(path, label, settleSeconds, maxPower, true);
+    }
+
+    private void followWithBeamBreakIntake(
+            PathChain path, String label, double settleSeconds, double maxPower, boolean stopAtEnd) {
         phase = "Intake " + label;
         intake.resetBeamBreakBallLatch();
         follower.setMaxPower(maxPower);
@@ -203,8 +209,43 @@ public class ZenithBlueClose extends LinearOpMode {
             postTelemetry();
         }
 
-        intake.Stop();
+        if (stopAtEnd) {
+            intake.Stop();
+        }
         follower.setMaxPower(MAX_POWER_NORMAL);
+    }
+
+    private void followDriveOnlyWithIntakeCarry(PathChain path, String label, double carrySeconds) {
+        phase = "Drive " + label;
+        follower.setMaxPower(MAX_POWER_NORMAL);
+        follower.followPath(path, true);
+
+        double carryElapsedS = 0.0;
+        boolean carryingIntake = carrySeconds > 0.0;
+
+        while (opModeIsActive() && follower.isBusy()) {
+            double dt = nextDt();
+            follower.update();
+            updateLauncher(dt);
+
+            if (carryingIntake) {
+                if (carryElapsedS < carrySeconds) {
+                    carryElapsedS += dt;
+                    intake.PickUpDifferential(dt);
+                    phase = String.format("Drive %s intake %.1f/%.1fs", label, carryElapsedS, carrySeconds);
+                } else {
+                    intake.Stop();
+                    carryingIntake = false;
+                    phase = "Drive " + label;
+                }
+            }
+
+            postTelemetry();
+        }
+
+        if (carryingIntake) {
+            intake.Stop();
+        }
     }
 
     private void prepareLauncher(double aimPosition) {

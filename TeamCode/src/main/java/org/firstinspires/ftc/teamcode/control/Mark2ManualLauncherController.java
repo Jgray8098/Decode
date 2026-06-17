@@ -15,7 +15,7 @@ public class Mark2ManualLauncherController {
 
     public static final double CLOSE_ZONE_RPM = 2450.0;
     public static final double CLOSE_ZONE_HOOD_POSITION = 0.60;
-    public static final double FAR_ZONE_RPM = 3250.0;
+    public static final double FAR_ZONE_RPM = 3200.0;
     public static final double FAR_ZONE_HOOD_POSITION = 0.80;
 
     private enum ShotZone {
