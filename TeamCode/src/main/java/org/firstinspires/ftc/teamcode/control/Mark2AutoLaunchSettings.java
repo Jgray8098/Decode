@@ -6,7 +6,7 @@ package org.firstinspires.ftc.teamcode.control;
 public final class Mark2AutoLaunchSettings {
 
     public static final double AUTO_CLOSE_RPM = 2450.0;
-    public static final double AUTO_CLOSE_HOOD_POSITION = 0.60;
+    public static final double AUTO_CLOSE_HOOD_POSITION = 0.55;
 
     public static final double AUTO_ROW1_RPM = 2450;
     public static final double AUTO_ROW1_HOOD_POSITION = 0.60;
